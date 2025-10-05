@@ -7,92 +7,99 @@
 <body>
 <main class="main">
     <h1 class="title">ドラフト管理画面</h1>
-
     <div class="container">
         <div class="status-section">
             <h2>現在選択中の選手 (第<span id="round-number">1</span>巡)</h2>
-            <ul id="current-selection-list">
-                </ul>
+            <ul id="current-selection-list"></ul>
         </div>
-
         <div class="acquired-section">
             <h2>各チーム獲得選手一覧</h2>
-            <ul id="acquired-players-list">
-                </ul>
+            <ul id="acquired-players-list"></ul>
         </div>
     </div>
-
     <div class="controls">
         <button onclick="proceedToNextRound()">選択を確定し次巡へ</button>
     </div>
 </main>
 
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
 <script>
-    // チームリスト (チームが増えたらここに追加)
-    const teams = ['team1']; 
-
-    // ページ読み込み時に表示を更新
-    window.onload = function() {
-        updateDisplay();
+    // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+    // Firebaseプロジェクトの設定情報をここに貼り付け
+    const firebaseConfig = {
+  apiKey: "AIzaSyBwlnFf-ocmnNq3ZvudKC1Okgak6thaE9o",
+  authDomain: "draft-59823.firebaseapp.com",
+  databaseURL: "https://draft-59823-default-rtdb.firebaseio.com",
+  projectId: "draft-59823",
+  storageBucket: "draft-59823.firebasestorage.app",
+  messagingSenderId: "500987145047",
+  appId: "1:500987145047:web:7e948b8ae4493f7e84ac12"
     };
+    // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-    // 表示を更新する関数
-    function updateDisplay() {
-        const currentSelectionList = document.getElementById('current-selection-list');
-        const acquiredPlayersList = document.getElementById('acquired-players-list');
-        const roundNumberEl = document.getElementById('round-number');
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const teams = ['team1']; // チームが増えたらここに追加
 
-        // 中身を一度空にする
-        currentSelectionList.innerHTML = '';
-        acquiredPlayersList.innerHTML = '';
+    // データベースの参照場所を定義
+    const roundRef = database.ref('round');
+    const currentSelectionsRef = database.ref('currentSelections');
+    const acquiredPlayersRef = database.ref('acquiredPlayers');
 
-        // 現在の巡数を取得 (なければ1巡目)
-        let round = localStorage.getItem('draftRound') || 1;
-        roundNumberEl.textContent = round;
+    // データが変更されたら表示を更新
+    roundRef.on('value', snapshot => {
+        document.getElementById('round-number').textContent = snapshot.val() || 1;
+    });
 
-        // 各チームの情報を表示
+    currentSelectionsRef.on('value', snapshot => {
+        const list = document.getElementById('current-selection-list');
+        list.innerHTML = '';
+        const selections = snapshot.val() || {};
         teams.forEach(team => {
-            // 現在選択中の選手
-            const currentSelection = localStorage.getItem(team + '_currentSelection') || '未選択';
-            const currentLi = document.createElement('li');
-            currentLi.textContent = `チーム1: ${currentSelection}`;
-            currentSelectionList.appendChild(currentLi);
-            
-            // 獲得済みの選手
-            const acquiredPlayers = JSON.parse(localStorage.getItem(team + '_acquiredPlayers')) || [];
-            const acquiredLi = document.createElement('li');
-            acquiredLi.textContent = `チーム1: ${acquiredPlayers.join(', ') || 'なし'}`;
-            acquiredPlayersList.appendChild(acquiredLi);
+            const player = selections[team] || '未選択';
+            const li = document.createElement('li');
+            li.textContent = `チーム1: ${player}`;
+            list.appendChild(li);
         });
-    }
+    });
+
+    acquiredPlayersRef.on('value', snapshot => {
+        const list = document.getElementById('acquired-players-list');
+        list.innerHTML = '';
+        const allAcquired = snapshot.val() || {};
+        teams.forEach(team => {
+            const players = allAcquired[team] ? Object.values(allAcquired[team]).join(', ') : 'なし';
+            const li = document.createElement('li');
+            li.textContent = `チーム1: ${players}`;
+            list.appendChild(li);
+        });
+    });
 
     // 次の巡に進む関数
-    function proceedToNextRound() {
-        if (!confirm('現在の選択を確定し、次の巡に進みますか？')) {
-            return;
-        }
+    async function proceedToNextRound() {
+        if (!confirm('現在の選択を確定し、次の巡に進みますか？')) return;
 
-        let round = parseInt(localStorage.getItem('draftRound') || 1);
+        const currentSelectionsSnapshot = await currentSelectionsRef.once('value');
+        const currentSelections = currentSelectionsSnapshot.val();
 
-        teams.forEach(team => {
-            const currentSelection = localStorage.getItem(team + '_currentSelection');
-            
-            if (currentSelection) {
-                // 獲得済み選手リストを取得し、今回の選択を追加
-                let acquiredPlayers = JSON.parse(localStorage.getItem(team + '_acquiredPlayers')) || [];
-                acquiredPlayers.push(currentSelection);
-                localStorage.setItem(team + '_acquiredPlayers', JSON.stringify(acquiredPlayers));
-
-                // 今回の選択をクリア
-                localStorage.removeItem(team + '_currentSelection');
+        if (currentSelections) {
+            for (const team in currentSelections) {
+                // 獲得選手リストに現在の選択を追加 (pushで一意のIDが自動生成)
+                acquiredPlayersRef.child(team).push(currentSelections[team]);
             }
-        });
+        }
         
-        // 巡数を更新
-        localStorage.setItem('draftRound', round + 1);
+        // 現在の巡数を取得して1増やす
+        const roundSnapshot = await roundRef.once('value');
+        const nextRound = (roundSnapshot.val() || 1) + 1;
 
-        // 表示を更新
-        updateDisplay();
+        // 現在の選択をクリアし、巡数を更新
+        await currentSelectionsRef.remove();
+        await roundRef.set(nextRound);
+
+        alert(`第${nextRound}巡に移行します。`);
     }
 </script>
 </body>

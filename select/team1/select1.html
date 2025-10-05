@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <head>
-		<meta charset="UTF--8">
-		<meta name="robots" content="noindex">
-		<link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="robots" content="noindex">
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main class="main">
@@ -10,46 +10,64 @@
     <label for="pet-select">選択希望選手</label>
     <form name="jstest">
         <select name="pets" id="pet-select">
-            <option name="def" value="">--選手を選択してください--</option>
-            <option name="senda" value="仙田">仙田</option>
-            <option name="arai" value="新井">新井</option>
-            <option name="uesaka" value="上坂">上坂</option>
-            <option name="tanaka" value="田中">田中</option>
-            <option name="ukai" value="鵜飼">鵜飼</option>
-            <option name="nunome" value="布目">布目</option>
-            <option name="tomitaka" value="冨高">冨高</option>
-            <option name="otera" value="大寺">大寺</option>
+            <option value="">--選手を選択してください--</option>
+            <option value="仙田">仙田</option>
+            <option value="新井">新井</option>
+            <option value="上坂">上坂</option>
+            <option value="田中">田中</option>
+            <option value="鵜飼">鵜飼</option>
+            <option value="布目">布目</option>
+            <option value="冨高">冨高</option>
+            <option value="大寺">大寺</option>
         </select>
     </form>
-    <input type="button" value="確定" onclick="JsBtn()"/>
+    <input type="button" value="確定" onclick="submitSelection()"/>
     <div class="selected">選択選手： <span id="BtnTest"></span></div>
-    
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
     <script>
-    // ページが読み込まれた時に、保存されている選択を読み込む
-    window.onload = function() {
-        const savedSelection = localStorage.getItem('team1_currentSelection');
-        if (savedSelection) {
-            document.getElementById("BtnTest").textContent = savedSelection;
-            // ドロップダウンも保存された値に設定
-            document.jstest.pets.value = savedSelection;
-        }
-    };
+        // ▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼▼
+        // Firebaseプロジェクトの設定情報をここに貼り付け
+        const firebaseConfig = {
+  apiKey: "AIzaSyBwlnFf-ocmnNq3ZvudKC1Okgak6thaE9o",
+  authDomain: "draft-59823.firebaseapp.com",
+  databaseURL: "https://draft-59823-default-rtdb.firebaseio.com",
+  projectId: "draft-59823",
+  storageBucket: "draft-59823.firebasestorage.app",
+  messagingSenderId: "500987145047",
+  appId: "1:500987145047:web:7e948b8ae4493f7e84ac12"
+        };
+        // ▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲▲
 
-    function JsBtn(){
-        var boxnumber = document.jstest.pets;
-        var number = boxnumber.selectedIndex;
-        var val = boxnumber.options[number].value;
+        // Firebaseの初期化
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const teamId = 'team1'; // このページのチームID
 
-        if(val) {
-            // 選択した選手をlocalStorageに保存
-            localStorage.setItem('team1_currentSelection', val);
-            document.getElementById("BtnTest").textContent = val;
-            alert('「' + val + '」選手を指名しました。');
-        } else {
-            localStorage.removeItem('team1_currentSelection'); // 未選択状態を保存
-            document.getElementById("BtnTest").textContent = "選択されていません";
+        // 選択をFirebaseに送信する関数
+        function submitSelection() {
+            const selectedPlayer = document.jstest.pets.value;
+            if (selectedPlayer) {
+                // データベースの 'currentSelections/team1' に選手名を書き込む
+                database.ref('currentSelections/' + teamId).set(selectedPlayer)
+                    .then(() => {
+                        alert('「' + selectedPlayer + '」選手を指名しました。');
+                    });
+            } else {
+                // 未選択の場合はデータベースから削除
+                database.ref('currentSelections/' + teamId).remove();
+            }
         }
-    }
+
+        // データベースを監視して、表示を更新
+        const selectionRef = database.ref('currentSelections/' + teamId);
+        selectionRef.on('value', (snapshot) => {
+            const selectedPlayer = snapshot.val();
+            document.getElementById("BtnTest").textContent = selectedPlayer || "未選択";
+            document.jstest.pets.value = selectedPlayer || "";
+        });
     </script>
 </main>
 </body>
