@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<head>
+		<meta charset="UTF-8">
+		<meta name="robots" content="noindex">
+		<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="main">
+    <h1 class="tytle">第一巡選択希望選手選択画面</h1>
+    <label for="pet-select">選択希望選手</label>
+<form name="jstest">
+<select name="pets" id="pet-select">
+  <option name="def" value="">24代</option>
+  <option name="senda" value="仙田">仙田</option>
+  <option name="arai" value="新井">新井</option>
+  <option name="uesaka" value="上坂">上坂</option>
+  <option name="tanaka" value="田中">田中</option>
+  <option name="ukai" value="鵜飼">鵜飼</option>
+  <option name="nunome" value="布目">布目</option>
+  <option name="tomitaka" value="冨高">冨高</option>
+  <option name="otera" value="大寺">大寺</option>
+
+</select>
+</form>
+<input type="button" value="確定" onclick="JsBtn()"/>
+<div class="selected">選択選手は<span id="BtnTest"></span>です</div>
+
+<script>
+function JsBtn(){
+	var boxnumber = document.jstest.pets;
+
+	var number = boxnumber.selectedIndex;
+
+	var val = boxnumber.options[number].value;
+
+	document.getElementById("BtnTest").textContent = val; 
+}
+</script>
+</body>
+
+</main>
