@@ -6,7 +6,7 @@
 </head>
 <body>
 <main class="main">
-    <h1 class="tytle">第一巡選択希望選手選択画面</h1>
+    <h1 class="tytle" id="round-title">第一巡選択希望選手選択画面</h1>
     <label for="pet-select">選択希望選手</label>
     <form name="jstest">
         <select name="pets" id="pet-select">
@@ -34,7 +34,25 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         const teamId = 'team1'; // このページのチームID
+        // 巡目(round)の変更を監視
+        roundRef.on('value', (snapshot) => {
+            const round = snapshot.val() || 1;
+            // ページのタイトルを現在の巡目に更新
+            document.getElementById('round-title').textContent = `第${round}巡選択希望選手選択画面`;
+            
+            // 選択内容をリセット
+            document.getElementById("BtnTest").textContent = "未選択";
+            document.jstest.pets.value = "";
+        });
 
+        // 現在の選択状況を監視
+        selectionRef.on('value', (snapshot) => {
+            const selectedPlayer = snapshot.val();
+            if (selectedPlayer) {
+                document.getElementById("BtnTest").textContent = selectedPlayer;
+                document.jstest.pets.value = selectedPlayer;
+            }
+        });
         // 選択をFirebaseに送信する関数
         function submitSelection() {
             const selectedPlayer = document.jstest.pets.value;
