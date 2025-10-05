@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="UTF-8">
+    <title>管理者ページ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="main">
+    <h1 class="title">ドラフト管理画面</h1>
+
+    <div class="container">
+        <div class="status-section">
+            <h2>現在選択中の選手 (第<span id="round-number">1</span>巡)</h2>
+            <ul id="current-selection-list">
+                </ul>
+        </div>
+
+        <div class="acquired-section">
+            <h2>各チーム獲得選手一覧</h2>
+            <ul id="acquired-players-list">
+                </ul>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button onclick="proceedToNextRound()">選択を確定し次巡へ</button>
+    </div>
+</main>
+
+<script>
+    // チームリスト (チームが増えたらここに追加)
+    const teams = ['team1']; 
+
+    // ページ読み込み時に表示を更新
+    window.onload = function() {
+        updateDisplay();
+    };
+
+    // 表示を更新する関数
+    function updateDisplay() {
+        const currentSelectionList = document.getElementById('current-selection-list');
+        const acquiredPlayersList = document.getElementById('acquired-players-list');
+        const roundNumberEl = document.getElementById('round-number');
+
+        // 中身を一度空にする
+        currentSelectionList.innerHTML = '';
+        acquiredPlayersList.innerHTML = '';
+
+        // 現在の巡数を取得 (なければ1巡目)
+        let round = localStorage.getItem('draftRound') || 1;
+        roundNumberEl.textContent = round;
+
+        // 各チームの情報を表示
+        teams.forEach(team => {
+            // 現在選択中の選手
+            const currentSelection = localStorage.getItem(team + '_currentSelection') || '未選択';
+            const currentLi = document.createElement('li');
+            currentLi.textContent = `チーム1: ${currentSelection}`;
+            currentSelectionList.appendChild(currentLi);
+            
+            // 獲得済みの選手
+            const acquiredPlayers = JSON.parse(localStorage.getItem(team + '_acquiredPlayers')) || [];
+            const acquiredLi = document.createElement('li');
+            acquiredLi.textContent = `チーム1: ${acquiredPlayers.join(', ') || 'なし'}`;
+            acquiredPlayersList.appendChild(acquiredLi);
+        });
+    }
+
+    // 次の巡に進む関数
+    function proceedToNextRound() {
+        if (!confirm('現在の選択を確定し、次の巡に進みますか？')) {
+            return;
+        }
+
+        let round = parseInt(localStorage.getItem('draftRound') || 1);
+
+        teams.forEach(team => {
+            const currentSelection = localStorage.getItem(team + '_currentSelection');
+            
+            if (currentSelection) {
+                // 獲得済み選手リストを取得し、今回の選択を追加
+                let acquiredPlayers = JSON.parse(localStorage.getItem(team + '_acquiredPlayers')) || [];
+                acquiredPlayers.push(currentSelection);
+                localStorage.setItem(team + '_acquiredPlayers', JSON.stringify(acquiredPlayers));
+
+                // 今回の選択をクリア
+                localStorage.removeItem(team + '_currentSelection');
+            }
+        });
+        
+        // 巡数を更新
+        localStorage.setItem('draftRound', round + 1);
+
+        // 表示を更新
+        updateDisplay();
+    }
+</script>
+</body>
+</html>
