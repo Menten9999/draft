@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="robots" content="noindex">
-    <link rel="stylesheet" href="style.css">
+		<meta charset="UTF-8">
+		<meta name="robots" content="noindex">
+		<link rel="stylesheet" href="style.css">
 </head>
 <body>
 <main class="main">
-    <h1 class="tytle" id="round-title">第一巡選択希望選手選択画面</h1>
+    <h1 class="tytle" id="round-title">選択希望選手選択画面</h1>
     <label for="pet-select">選択希望選手</label>
     <form name="jstest">
         <select name="pets" id="pet-select">
@@ -21,61 +21,60 @@
             <option value="大寺">大寺</option>
         </select>
     </form>
-    <input type="button" value="確定" onclick="submitSelection()"/>
+    <input type="button" value="確定" onclick="JsBtn()"/>
     <div class="selected">選択選手： <span id="BtnTest"></span></div>
-
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-
-
-    <script src="firebase-config.js"></script>
+    
     <script>
+        const teamId = 'team1';
+        const currentSelectionKey = teamId + '_currentSelection';
+        const roundKey = 'draftRound';
 
-
-        // Firebaseの初期化
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-        const teamId = 'team1'; // このページのチームID
-        // 巡目(round)の変更を監視
-        roundRef.on('value', (snapshot) => {
-            const round = snapshot.val() || 1;
-            // ページのタイトルを現在の巡目に更新
+        // ページの表示を更新するための関数
+        function updatePageDisplay() {
+            // 1. 巡目をlocalStorageから取得してh1タグを更新
+            const round = localStorage.getItem(roundKey) || 1;
             document.getElementById('round-title').textContent = `第${round}巡選択希望選手選択画面`;
-            
-            // 選択内容をリセット
-            document.getElementById("BtnTest").textContent = "未選択";
-            document.jstest.pets.value = "";
-        });
 
-        // 現在の選択状況を監視
-        selectionRef.on('value', (snapshot) => {
-            const selectedPlayer = snapshot.val();
-            if (selectedPlayer) {
-                document.getElementById("BtnTest").textContent = selectedPlayer;
-                document.jstest.pets.value = selectedPlayer;
-            }
-        });
-        // 選択をFirebaseに送信する関数
-        function submitSelection() {
-            const selectedPlayer = document.jstest.pets.value;
-            if (selectedPlayer) {
-                // データベースの 'currentSelections/team1' に選手名を書き込む
-                database.ref('currentSelections/' + teamId).set(selectedPlayer)
-                    .then(() => {
-                        alert('「' + selectedPlayer + '」選手を指名しました。');
-                    });
+            // 2. 選択選手をlocalStorageから取得して表示を更新
+            const savedSelection = localStorage.getItem(currentSelectionKey);
+            if (savedSelection) {
+                document.getElementById("BtnTest").textContent = savedSelection;
+                document.jstest.pets.value = savedSelection;
             } else {
-                // 未選択の場合はデータベースから削除
-                database.ref('currentSelections/' + teamId).remove();
+                // 保存されている選手がいない場合（次巡に進んだ場合など）は表示をクリア
+                document.getElementById("BtnTest").textContent = "選択されていません";
+                document.jstest.pets.value = "";
             }
         }
 
-        // データベースを監視して、表示を更新
-        const selectionRef = database.ref('currentSelections/' + teamId);
-        selectionRef.on('value', (snapshot) => {
-            const selectedPlayer = snapshot.val();
-            document.getElementById("BtnTest").textContent = selectedPlayer || "未選択";
-            document.jstest.pets.value = selectedPlayer || "";
+        // 「確定」ボタンが押されたときの処理
+        function JsBtn(){
+            const selectedValue = document.jstest.pets.value;
+
+            if(selectedValue) {
+                // 選択した選手をlocalStorageに保存
+                localStorage.setItem(currentSelectionKey, selectedValue);
+                document.getElementById("BtnTest").textContent = selectedValue;
+                alert('「' + selectedValue + '」選手を指名しました。');
+            } else {
+                // 未選択の場合はlocalStorageから削除
+                localStorage.removeItem(currentSelectionKey);
+                document.getElementById("BtnTest").textContent = "選択されていません";
+            }
+        }
+
+        // ページが最初に読み込まれた時に、表示を整える
+        window.onload = function() {
+            updatePageDisplay();
+        };
+
+        // ★★★重要★★★
+        // 他のタブでlocalStorageが変更されたのを検知して、表示をリアルタイムに更新
+        window.addEventListener('storage', function(event) {
+            // 管理者ページで巡目が進んだり、データがクリアされた場合にこのページも更新する
+            if (event.key === roundKey || event.key === currentSelectionKey) {
+                updatePageDisplay();
+            }
         });
     </script>
 </main>
