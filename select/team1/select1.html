@@ -49,35 +49,50 @@
 <script src="firebase-config.js"></script>
 
 <script>
-    firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
-    const teamId = 'team1';
+    roundRef.on('value', (snapshot) => {
+        const round = snapshot.val() || 1;
+        document.getElementById('round-title').textContent = `第${round}巡選択希望選手選択画面`;
+    });
 
-    const roundRef = database.ref('round');
-    const selectionRef = database.ref('currentSelections/' + teamId);
-    const statusRef = database.ref('teamStatus/' + teamId);
-    // ★★★ 全体警告を監視するRefを追加 ★★★
-    const systemAlertRef = database.ref('systemAlert');
+    selectionRef.on('value', (snapshot) => {
+        const selectedPlayer = snapshot.val();
+        document.getElementById("BtnTest").textContent = selectedPlayer || "未選択";
+        document.jstest.pets.value = selectedPlayer || "";
+    });
 
-    // (中略... 既存の監視ロジックは変更なし)
-    roundRef.on('value', (snapshot) => { /* ... */ });
-    selectionRef.on('value', (snapshot) => { /* ... */ });
-    statusRef.on('value', (snapshot) => { /* ... */ });
-
-    // ★★★ 全体警告の変更を監視する処理を追加 ★★★
+    statusRef.on('value', (snapshot) => {
+        const message = snapshot.val();
+        const messageEl = document.getElementById('status-message');
+        if (message) {
+            messageEl.textContent = message;
+            setTimeout(() => {
+                messageEl.textContent = '';
+                statusRef.remove(); 
+            }, 5000);
+        }
+    });
+    
     systemAlertRef.on('value', (snapshot) => {
         const message = snapshot.val();
         const overlay = document.getElementById('system-alert-overlay');
         if (message) {
             overlay.textContent = message;
-            overlay.style.display = 'flex'; // オーバーレイを表示
+            overlay.style.display = 'flex';
         } else {
-            overlay.style.display = 'none'; // メッセージがなければ非表示
+            overlay.style.display = 'none';
         }
     });
 
-    // 選択を送信する関数 (変更なし)
-    function submitSelection() { /* ... */ }
-</script>
+    function submitSelection() {
+        const selectedPlayer = document.jstest.pets.value;
+        if (selectedPlayer) {
+            selectionRef.set(selectedPlayer)
+                .then(() => {
+                    alert('「' + selectedPlayer + '」選手を指名しました。');
+                });
+        } else {
+            selectionRef.remove();
+        }
+    }</script>
 </body>
 </html>
