@@ -19,6 +19,8 @@
     </div>
     <div class="controls">
         <button onclick="proceedToNextRound()">選択を確定し次巡へ</button>
+        <button onclick="resetAllData()" class="reset-button">ドラフトをリセット</button>
+    </div>
     </div>
 </main>
 
@@ -90,6 +92,31 @@
 
         alert(`第${nextRound}巡に移行します。`);
     }
+    // 全てのドラフトデータを初期化する関数
+    async function resetAllData() {
+        const confirmationText = "delete";
+        const userInput = prompt(
+            `警告：すべてのドラフトデータ（巡目、選択中の選手、獲得選手一覧）が完全に削除され、元に戻せません。\n\nこの操作を確定するには、「${confirmationText}」と入力してください。`
+        );
+
+        // 入力されたテキストが "delete" と一致するか確認
+        if (userInput === confirmationText) {
+            try {
+                // Firebaseのデータをすべて削除
+                await database.ref().set(null);
+                
+                // 巡目を1に再設定
+                await roundRef.set(1);
+
+                alert("ドラフトデータが正常に初期化されました。");
+            } catch (error) {
+                alert("エラーが発生しました：" + error.message);
+            }
+        } else if (userInput !== null) { // キャンセルではなく、間違った文字が入力された場合
+            alert("入力が間違っています。初期化はキャンセルされました。");
+        }
+    }
+
 </script>
 </body>
 </html>
