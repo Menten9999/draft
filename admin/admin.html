@@ -24,9 +24,7 @@
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-
-
-    <script src="firebase-config.js"></script>
+<script src="firebase-config.js"></script>
 <script>
 
 
@@ -34,16 +32,16 @@
     const database = firebase.database();
     const teams = ['team1']; // チームが増えたらここに追加
 
-    // データベースの参照場所を定義
     const roundRef = database.ref('round');
     const currentSelectionsRef = database.ref('currentSelections');
     const acquiredPlayersRef = database.ref('acquiredPlayers');
 
-    // データが変更されたら表示を更新
+    // 巡目の変更を監視して表示を更新
     roundRef.on('value', snapshot => {
         document.getElementById('round-number').textContent = snapshot.val() || 1;
     });
 
+    // 現在の選択状況の変更を監視して表示を更新
     currentSelectionsRef.on('value', snapshot => {
         const list = document.getElementById('current-selection-list');
         list.innerHTML = '';
@@ -56,6 +54,7 @@
         });
     });
 
+    // 獲得済み選手の変更を監視して表示を更新
     acquiredPlayersRef.on('value', snapshot => {
         const list = document.getElementById('acquired-players-list');
         list.innerHTML = '';
@@ -68,7 +67,7 @@
         });
     });
 
-    // 次の巡に進む関数
+    // 「次巡へ」ボタンを押したときの処理
     async function proceedToNextRound() {
         if (!confirm('現在の選択を確定し、次の巡に進みますか？')) return;
 
@@ -77,12 +76,11 @@
 
         if (currentSelections) {
             for (const team in currentSelections) {
-                // 獲得選手リストに現在の選択を追加 (pushで一意のIDが自動生成)
+                // 獲得済み選手リストに現在の選択を追加
                 acquiredPlayersRef.child(team).push(currentSelections[team]);
             }
         }
         
-        // 現在の巡数を取得して1増やす
         const roundSnapshot = await roundRef.once('value');
         const nextRound = (roundSnapshot.val() || 1) + 1;
 
