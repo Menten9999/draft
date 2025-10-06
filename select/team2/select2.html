@@ -49,11 +49,41 @@
     // ★★★ 選手確定状態を監視するRefを追加 ★★★
     const confirmedRef = database.ref('selectionConfirmed/' + teamId);
 
-    // 巡目の変更を監視 (変更なし)
-    roundRef.on('value', (snapshot) => { /* ... */ });
-    selectionRef.on('value', (snapshot) => { /* ... */ });
-    statusRef.on('value', (snapshot) => { /* ... */ });
-    systemAlertRef.on('value', (snapshot) => { /* ... */ });
+    roundRef.on('value', (snapshot) => {
+        const round = snapshot.val() || 1;
+        document.getElementById('round-title').textContent = `第${round}巡選択希望選手選択画面`;
+    });
+
+    selectionRef.on('value', (snapshot) => {
+        const selectedPlayer = snapshot.val();
+        document.getElementById("BtnTest").textContent = selectedPlayer || "未選択";
+        document.jstest.pets.value = selectedPlayer || "";
+    });
+
+    statusRef.on('value', (snapshot) => {
+        const message = snapshot.val();
+        const messageEl = document.getElementById('status-message');
+        if (message) {
+            messageEl.textContent = message;
+            setTimeout(() => {
+                messageEl.textContent = '';
+                statusRef.remove(); 
+            }, 5000);
+        }
+    });
+
+    systemAlertRef.on('value', (snapshot) => {
+        const message = snapshot.val();
+        const overlay = document.getElementById('system-alert-overlay');
+        if (message) {
+            overlay.textContent = message;
+            overlay.style.display = 'flex';
+        } else {
+            overlay.style.display = 'none';
+        }
+    });
+
+
 
     // ★★★ 選手確定状態を監視する処理を追加 ★★★
     confirmedRef.on('value', (snapshot) => {
