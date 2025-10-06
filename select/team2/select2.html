@@ -23,10 +23,6 @@
     <form name="jstest">
         <select name="pets" id="pet-select">
             <option value="">--選手を選択してください--</option>
-            <option value="仙田">仙田</option>
-            <option value="新井">新井</option>
-            <option value="上坂">上坂</option>
-            <option value="鵜飼">鵜飼</option>
         </select>
     </form>
     <input type="button" value="確定" onclick="submitSelection()"/>
@@ -42,12 +38,39 @@
     const database = firebase.database();
     const teamId = 'team2';
 
+    const allPlayers = ["仙田", "新井", "上坂", "田中", "鵜飼", "布目", "冨高", "大寺"];
+
     const roundRef = database.ref('round');
     const selectionRef = database.ref('currentSelections/' + teamId);
     const statusRef = database.ref('teamStatus/' + teamId);
     const systemAlertRef = database.ref('systemAlert');
-    // ★★★ 選手確定状態を監視するRefを追加 ★★★
     const confirmedRef = database.ref('selectionConfirmed/' + teamId);
+    const acquiredPlayersRef = database.ref('acquiredPlayers');
+
+    function updatePlayerOptions(acquiredPlayersList) {
+        const selectElement = document.getElementById('pet-select');
+        const currentSelectedValue = selectElement.value;
+        selectElement.innerHTML = '<option value="">--選手を選択してください--</option>';
+
+        const availablePlayers = allPlayers.filter(player => !acquiredPlayersList.includes(player));
+
+        availablePlayers.forEach(player => {
+            const option = document.createElement('option');
+            option.value = player;
+            option.textContent = player;
+            selectElement.appendChild(option);
+        });
+        selectElement.value = currentSelectedValue;
+    }
+
+    acquiredPlayersRef.on('value', (snapshot) => {
+        const allAcquiredData = snapshot.val() || {};
+        let acquiredPlayersList = [];
+        for (const team in allAcquiredData) {
+            acquiredPlayersList = acquiredPlayersList.concat(Object.values(allAcquiredData[team]));
+        }
+        updatePlayerOptions(acquiredPlayersList);
+    });
 
     roundRef.on('value', (snapshot) => {
         const round = snapshot.val() || 1;
@@ -71,7 +94,7 @@
             }, 5000);
         }
     });
-
+    
     systemAlertRef.on('value', (snapshot) => {
         const message = snapshot.val();
         const overlay = document.getElementById('system-alert-overlay');
@@ -83,21 +106,19 @@
         }
     });
 
-
-
-    // ★★★ 選手確定状態を監視する処理を追加 ★★★
     confirmedRef.on('value', (snapshot) => {
         const isConfirmed = snapshot.val();
         const mainContent = document.getElementById('selection-main');
         const waitingOverlay = document.getElementById('waiting-overlay');
         if (isConfirmed) {
-            mainContent.style.display = 'none'; // 選択画面を非表示
-            waitingOverlay.style.display = 'flex'; // 待機画面を表示
+            mainContent.style.display = 'none';
+            waitingOverlay.style.display = 'flex';
         } else {
-            mainContent.style.display = 'block'; // 選択画面を表示
-            waitingOverlay.style.display = 'none'; // 待機画面を非表示
+            mainContent.style.display = 'block';
+            waitingOverlay.style.display = 'none';
         }
     });
+
     function submitSelection() {
         const selectedPlayer = document.jstest.pets.value;
         if (selectedPlayer) {
