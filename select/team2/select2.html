@@ -26,6 +26,7 @@
         </select>
     </form>
     <input type="button" value="確定" onclick="submitSelection()"/>
+    <input type="button" value="選択を辞退" onclick="passSelection()" class="pass-button"/>
     <div class="selected">選択選手： <span id="BtnTest"></span></div>
     <div id="status-message"></div>
 </main>
@@ -46,6 +47,7 @@
     const systemAlertRef = database.ref('systemAlert');
     const confirmedRef = database.ref('selectionConfirmed/' + teamId);
     const acquiredPlayersRef = database.ref('acquiredPlayers');
+      const passedRef = database.ref('teamsPassed/' + teamId);
 
     function updatePlayerOptions(acquiredPlayersList) {
         const selectElement = document.getElementById('pet-select');
@@ -128,6 +130,27 @@
                 });
         } else {
             selectionRef.remove();
+        }
+    }
+     passedRef.on('value', (snapshot) => {
+        const isPassed = snapshot.val();
+        const mainContent = document.getElementById('selection-main');
+        const waitingOverlay = document.getElementById('waiting-overlay');
+        if (isPassed) {
+            mainContent.style.display = 'none';
+            waitingOverlay.textContent = '選択を辞退しました。ドラフト終了までお待ちください。';
+            waitingOverlay.style.display = 'flex';
+        } else if (!document.getElementById('waiting-overlay').textContent.includes('他のチーム')) {
+            // 待機画面が表示されていない場合のみ選択画面に戻す
+            mainContent.style.display = 'block';
+            waitingOverlay.style.display = 'none';
+        }
+    });
+        // ★★★ 辞退ボタンを押したときの関数を新設 ★★★
+    function passSelection() {
+        if (confirm("この巡目以降の選手選択をすべて辞退します。よろしいですか？")) {
+            passedRef.set(true);
+            selectionRef.remove(); // 念のため現在の選択もクリア
         }
     }
 </script>
