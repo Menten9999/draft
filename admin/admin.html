@@ -3,6 +3,10 @@
     <meta charset="UTF-8">
     <title>管理者ページ</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .reset-button { background-color: #dc3545; margin-left: 15px; }
+        .reset-button:hover { background-color: #c82333; }
+    </style>
 </head>
 <body>
 <main class="main">
@@ -18,105 +22,140 @@
         </div>
     </div>
     <div class="controls">
-        <button onclick="proceedToNextRound()">選択を確定し次巡へ</button>
+        <button onclick="processSelectionsAndLottery()">選択を処理（競合時は抽選）</button>
         <button onclick="resetAllData()" class="reset-button">ドラフトをリセット</button>
-    </div>
     </div>
 </main>
 
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 <script src="firebase-config.js"></script>
+
 <script>
-
-
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
-    const teams = ['team1']; // チームが増えたらここに追加
+    // チームリストにteam2を追加 (必要に応じてさらに追加)
+    const teams = ['team1', 'team2']; 
 
     const roundRef = database.ref('round');
     const currentSelectionsRef = database.ref('currentSelections');
     const acquiredPlayersRef = database.ref('acquiredPlayers');
+    const teamStatusRef = database.ref('teamStatus');
 
-    // 巡目の変更を監視して表示を更新
+    // 表示更新のロジック (変更なし)
     roundRef.on('value', snapshot => {
         document.getElementById('round-number').textContent = snapshot.val() || 1;
     });
-
-    // 現在の選択状況の変更を監視して表示を更新
     currentSelectionsRef.on('value', snapshot => {
         const list = document.getElementById('current-selection-list');
         list.innerHTML = '';
         const selections = snapshot.val() || {};
         teams.forEach(team => {
             const player = selections[team] || '未選択';
+            const teamName = (team === 'team1') ? 'チーム1' : 'チーム2'; // チーム名表示を調整
             const li = document.createElement('li');
-            li.textContent = `チーム1: ${player}`;
+            li.textContent = `${teamName}: ${player}`;
             list.appendChild(li);
         });
     });
-
-    // 獲得済み選手の変更を監視して表示を更新
     acquiredPlayersRef.on('value', snapshot => {
         const list = document.getElementById('acquired-players-list');
         list.innerHTML = '';
         const allAcquired = snapshot.val() || {};
         teams.forEach(team => {
+            const teamName = (team === 'team1') ? 'チーム1' : 'チーム2';
             const players = allAcquired[team] ? Object.values(allAcquired[team]).join(', ') : 'なし';
             const li = document.createElement('li');
-            li.textContent = `チーム1: ${players}`;
+            li.textContent = `${teamName}: ${players}`;
             list.appendChild(li);
         });
     });
 
-    // 「次巡へ」ボタンを押したときの処理
-    async function proceedToNextRound() {
-        if (!confirm('現在の選択を確定し、次の巡に進みますか？')) return;
+    // ★★★ メインの抽選処理関数 ★★★
+    async function processSelectionsAndLottery() {
+        const selectionsSnapshot = await currentSelectionsRef.once('value');
+        const selections = selectionsSnapshot.val();
 
-        const currentSelectionsSnapshot = await currentSelectionsRef.once('value');
-        const currentSelections = currentSelectionsSnapshot.val();
+        if (!selections || Object.keys(selections).length < teams.length) {
+            alert("全チームが選手を選択していません。");
+            return;
+        }
 
-        if (currentSelections) {
-            for (const team in currentSelections) {
-                // 獲得済み選手リストに現在の選択を追加
-                acquiredPlayersRef.child(team).push(currentSelections[team]);
+        // 選手ごとに選択したチームをグループ化
+        const playerToTeams = {};
+        for (const teamId in selections) {
+            const player = selections[teamId];
+            if (!playerToTeams[player]) playerToTeams[player] = [];
+            playerToTeams[player].push(teamId);
+        }
+
+        const conflicts = {};
+        const nonConflicts = {};
+        for (const player in playerToTeams) {
+            if (playerToTeams[player].length > 1) {
+                conflicts[player] = playerToTeams[player];
+            } else {
+                nonConflicts[player] = playerToTeams[player];
             }
         }
         
-        const roundSnapshot = await roundRef.once('value');
-        const nextRound = (roundSnapshot.val() || 1) + 1;
+        let alertLog = "";
 
-        // 現在の選択をクリアし、巡数を更新
-        await currentSelectionsRef.remove();
-        await roundRef.set(nextRound);
+        // 単独指名の処理
+        for (const player in nonConflicts) {
+            const teamId = nonConflicts[player][0];
+            await acquiredPlayersRef.child(teamId).push(player);
+            await teamStatusRef.child(teamId).set(`「${player}」を単独指名で獲得しました。`);
+        }
 
-        alert(`第${nextRound}巡に移行します。`);
-    }
-    // 全てのドラフトデータを初期化する関数
-    async function resetAllData() {
-        const confirmationText = "delete";
-        const userInput = prompt(
-            `警告：すべてのドラフトデータ（巡目、選択中の選手、獲得選手一覧）が完全に削除され、元に戻せません。\n\nこの操作を確定するには、「${confirmationText}」と入力してください。`
-        );
-
-        // 入力されたテキストが "delete" と一致するか確認
-        if (userInput === confirmationText) {
-            try {
-                // Firebaseのデータをすべて削除
-                await database.ref().set(null);
+        // 競合指名（抽選）の処理
+        if (Object.keys(conflicts).length > 0) {
+            alertLog += "以下の選手で競合が発生したため、抽選を行います。\n";
+            for (const player in conflicts) {
+                const competingTeams = conflicts[player];
+                const winner = competingTeams[Math.floor(Math.random() * competingTeams.length)];
                 
-                // 巡目を1に再設定
-                await roundRef.set(1);
+                alertLog += `\n[選手: ${player}] (競合: ${competingTeams.join(', ')})\n -> 当選: ${winner}！\n`;
 
-                alert("ドラフトデータが正常に初期化されました。");
-            } catch (error) {
-                alert("エラーが発生しました：" + error.message);
+                await acquiredPlayersRef.child(winner).push(player);
+                // 当選・落選のステータスをセット
+                for (const teamId of competingTeams) {
+                    if (teamId === winner) {
+                        await teamStatusRef.child(teamId).set(`「${player}」の抽選に当選しました！`);
+                    } else {
+                        await teamStatusRef.child(teamId).set(`「${player}」の抽選に外れました。再度選択してください。`);
+                    }
+                }
             }
-        } else if (userInput !== null) { // キャンセルではなく、間違った文字が入力された場合
-            alert("入力が間違っています。初期化はキャンセルされました。");
+        }
+        
+        // 全チームの現在の選択をクリア
+        await currentSelectionsRef.remove();
+
+        // 巡目を進めるかどうかの判定
+        if (Object.keys(conflicts).length > 0) {
+            alert(alertLog + "\n抽選に外れたチームは、同じ巡で再度選手を選択してください。");
+        } else {
+            alert("競合はありませんでした。全チームの選択を確定し、次巡へ進みます。");
+            const roundSnapshot = await roundRef.once('value');
+            const nextRound = (roundSnapshot.val() || 1) + 1;
+            await roundRef.set(nextRound);
+            await teamStatusRef.remove(); // 次巡に進むのでステータスをクリア
         }
     }
 
+    // リセット機能 (変更なし)
+    async function resetAllData() {
+        const confirmationText = "delete";
+        const userInput = prompt(`警告：すべてのドラフトデータが完全に削除されます。「${confirmationText}」と入力してください。`);
+        if (userInput === confirmationText) {
+            await database.ref().set(null);
+            await roundRef.set(1);
+            alert("ドラフトデータが初期化されました。");
+        } else if (userInput !== null) {
+            alert("入力が間違っています。初期化はキャンセルされました。");
+        }
+    }
 </script>
 </body>
 </html>
