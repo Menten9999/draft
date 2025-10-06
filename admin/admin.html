@@ -159,7 +159,17 @@ roundRef.on('value', snapshot => {
     }
     
     // リセット機能 (変更なし)
-    async function resetAllData() { /* ... */ }
+    async function resetAllData() {
+        const confirmationText = "delete";
+        const userInput = prompt(`警告：すべてのドラフトデータが完全に削除されます。「${confirmationText}」と入力してください。`);
+        if (userInput === confirmationText) {
+            await database.ref().set(null);
+            await roundRef.set(1);
+            alert("ドラフトデータが初期化されました。");
+        } else if (userInput !== null) {
+            alert("入力が間違っています。初期化はキャンセルされました。");
+        }
+    }
 </script>
 </body>
 </html>
