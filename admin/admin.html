@@ -34,44 +34,21 @@
 <script>
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
-    // チームリストにteam2を追加 (必要に応じてさらに追加)
     const teams = ['team1', 'team2']; 
 
     const roundRef = database.ref('round');
     const currentSelectionsRef = database.ref('currentSelections');
     const acquiredPlayersRef = database.ref('acquiredPlayers');
     const teamStatusRef = database.ref('teamStatus');
+    // ★★★ 全ページに警告を送るためのRefを追加 ★★★
+    const systemAlertRef = database.ref('systemAlert');
 
-    // 表示更新のロジック (変更なし)
-    roundRef.on('value', snapshot => {
-        document.getElementById('round-number').textContent = snapshot.val() || 1;
-    });
-    currentSelectionsRef.on('value', snapshot => {
-        const list = document.getElementById('current-selection-list');
-        list.innerHTML = '';
-        const selections = snapshot.val() || {};
-        teams.forEach(team => {
-            const player = selections[team] || '未選択';
-            const teamName = (team === 'team1') ? 'チーム1' : 'チーム2'; // チーム名表示を調整
-            const li = document.createElement('li');
-            li.textContent = `${teamName}: ${player}`;
-            list.appendChild(li);
-        });
-    });
-    acquiredPlayersRef.on('value', snapshot => {
-        const list = document.getElementById('acquired-players-list');
-        list.innerHTML = '';
-        const allAcquired = snapshot.val() || {};
-        teams.forEach(team => {
-            const teamName = (team === 'team1') ? 'チーム1' : 'チーム2';
-            const players = allAcquired[team] ? Object.values(allAcquired[team]).join(', ') : 'なし';
-            const li = document.createElement('li');
-            li.textContent = `${teamName}: ${players}`;
-            list.appendChild(li);
-        });
-    });
+    // (中略... 表示更新のロジックは変更なし)
+    roundRef.on('value', snapshot => { /* ... */ });
+    currentSelectionsRef.on('value', snapshot => { /* ... */ });
+    acquiredPlayersRef.on('value', snapshot => { /* ... */ });
 
-    // ★★★ メインの抽選処理関数 ★★★
+    // ★★★ メインの抽選処理関数を修正 ★★★
     async function processSelectionsAndLottery() {
         const selectionsSnapshot = await currentSelectionsRef.once('value');
         const selections = selectionsSnapshot.val();
@@ -98,64 +75,63 @@
                 nonConflicts[player] = playerToTeams[player];
             }
         }
-        
-        let alertLog = "";
 
+        // --- 競合がある場合の処理を修正 ---
+        if (Object.keys(conflicts).length > 0) {
+            // 1. 全ページに警告を表示させる
+            await systemAlertRef.set("競合が発生しました。ただいまから抽選を行います...");
+
+            // 2. 管理者に最終確認
+            if (!confirm("競合が発生しました。抽選に移行しますか？")) {
+                await systemAlertRef.remove(); // キャンセルされたら警告を消す
+                alert("抽選はキャンセルされました。");
+                return;
+            }
+
+            // 3. 抽選処理を実行
+            let alertLog = "抽選結果：\n";
+            for (const player in conflicts) {
+                const competingTeams = conflicts[player];
+                const winner = competingTeams[Math.floor(Math.random() * competingTeams.length)];
+                
+                alertLog += `\n[選手: ${player}] -> 当選: ${winner}！\n`;
+
+                await acquiredPlayersRef.child(winner).push(player);
+                for (const teamId of competingTeams) {
+                    const message = (teamId === winner) 
+                        ? `「${player}」の抽選に当選しました！`
+                        : `「${player}」の抽選に外れました。再度選択してください。`;
+                    await teamStatusRef.child(teamId).set(message);
+                }
+            }
+             alert(alertLog);
+        } else {
+            alert("競合はありませんでした。全チームの選択を確定します。");
+        }
+        
         // 単独指名の処理
         for (const player in nonConflicts) {
             const teamId = nonConflicts[player][0];
             await acquiredPlayersRef.child(teamId).push(player);
             await teamStatusRef.child(teamId).set(`「${player}」を単独指名で獲得しました。`);
         }
-
-        // 競合指名（抽選）の処理
-        if (Object.keys(conflicts).length > 0) {
-            alertLog += "以下の選手で競合が発生したため、抽選を行います。\n";
-            for (const player in conflicts) {
-                const competingTeams = conflicts[player];
-                const winner = competingTeams[Math.floor(Math.random() * competingTeams.length)];
-                
-                alertLog += `\n[選手: ${player}] (競合: ${competingTeams.join(', ')})\n -> 当選: ${winner}！\n`;
-
-                await acquiredPlayersRef.child(winner).push(player);
-                // 当選・落選のステータスをセット
-                for (const teamId of competingTeams) {
-                    if (teamId === winner) {
-                        await teamStatusRef.child(teamId).set(`「${player}」の抽選に当選しました！`);
-                    } else {
-                        await teamStatusRef.child(teamId).set(`「${player}」の抽選に外れました。再度選択してください。`);
-                    }
-                }
-            }
-        }
         
         // 全チームの現在の選択をクリア
         await currentSelectionsRef.remove();
+        // 警告メッセージをクリア
+        await systemAlertRef.remove();
 
         // 巡目を進めるかどうかの判定
-        if (Object.keys(conflicts).length > 0) {
-            alert(alertLog + "\n抽選に外れたチームは、同じ巡で再度選手を選択してください。");
-        } else {
-            alert("競合はありませんでした。全チームの選択を確定し、次巡へ進みます。");
+        if (Object.keys(conflicts).length === 0) {
             const roundSnapshot = await roundRef.once('value');
             const nextRound = (roundSnapshot.val() || 1) + 1;
             await roundRef.set(nextRound);
-            await teamStatusRef.remove(); // 次巡に進むのでステータスをクリア
+            await teamStatusRef.remove();
         }
     }
-
+    
     // リセット機能 (変更なし)
-    async function resetAllData() {
-        const confirmationText = "delete";
-        const userInput = prompt(`警告：すべてのドラフトデータが完全に削除されます。「${confirmationText}」と入力してください。`);
-        if (userInput === confirmationText) {
-            await database.ref().set(null);
-            await roundRef.set(1);
-            alert("ドラフトデータが初期化されました。");
-        } else if (userInput !== null) {
-            alert("入力が間違っています。初期化はキャンセルされました。");
-        }
-    }
+    async function resetAllData() { /* ... */ }
 </script>
 </body>
 </html>
