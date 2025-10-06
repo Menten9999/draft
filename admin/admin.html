@@ -42,6 +42,8 @@
     const systemAlertRef = database.ref('systemAlert');
     // ★★★ 選手確定状態を管理するRefを追加 ★★★
     const selectionConfirmedRef = database.ref('selectionConfirmed');
+        const teamsPassedRef = database.ref('teamsPassed');
+
 
     // (表示更新のロジックは変更なし)
 roundRef.on('value', snapshot => {
@@ -82,10 +84,12 @@ roundRef.on('value', snapshot => {
         const selections = selectionsSnapshot.val() || {};
         const confirmedSnapshot = await selectionConfirmedRef.once('value');
         const confirmed = confirmedSnapshot.val() || {};
+                const passedSnapshot = await teamsPassedRef.once('value');
+        const passed = passedSnapshot.val() || {};
 
-        const remainingTeams = teams.filter(team => !confirmed[team]);
+        const activeTeams = teams.filter(team => !confirmed[team] && !passed[team]);
         
-        if (Object.keys(selections).length < remainingTeams.length) {
+        if (Object.keys(selections).length < activeTeams.length) {
             alert("まだ選択を終えていないチームがいます。");
             return;
         }
@@ -148,16 +152,21 @@ roundRef.on('value', snapshot => {
         await systemAlertRef.remove();
 
         // ★★★ 変数名のタイプミスを修正し、巡目更新ロジックをここに集約 ★★★
-        const finalConfirmedSnapshot = await selectionConfirmedRef.once('value');
-        if (finalConfirmedSnapshot.val() && Object.keys(finalConfirmedSnapshot.val()).length === teams.length) {
+       const finalConfirmedSnapshot = await selectionConfirmedRef.once('value');
+        const finalPassedSnapshot = await teamsPassedRef.once('value');
+        const finalConfirmedCount = finalConfirmedSnapshot.val() ? Object.keys(finalConfirmedSnapshot.val()).length : 0;
+        const finalPassedCount = finalPassedSnapshot.val() ? Object.keys(finalPassedSnapshot.val()).length : 0;
+        
+        // 確定チーム数と辞退チーム数の合計が全チーム数と一致したら次巡へ
+        if (finalConfirmedCount + finalPassedCount === teams.length) {
             const roundSnapshot = await roundRef.once('value');
             const nextRound = (roundSnapshot.val() || 1) + 1;
             
             await roundRef.set(nextRound);
             await teamStatusRef.remove();
-            await selectionConfirmedRef.remove();
+            await selectionConfirmedRef.remove(); // 辞退していないチームの確定状態のみリセット
             
-            alert(`全チームの選択が確定しました。第${nextRound}巡に移行します。`);
+            alert(`全アクティブチームの選択が確定しました。第${nextRound}巡に移行します。`);
         }
     }
         
@@ -170,7 +179,7 @@ roundRef.on('value', snapshot => {
             await roundRef.set(1);
             alert("ドラフトデータが初期化されました。");
         } else if (userInput !== null) {
-            alert("入力が間違っています。初期化はキャンセルされました。");
+            alert("入力が間違っています。");
         }
     }
 </script>
