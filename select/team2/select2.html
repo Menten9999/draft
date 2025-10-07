@@ -45,7 +45,7 @@
     <div class="selected">選択選手： <span id="BtnTest"></span></div>
     <div id="status-message"></div>
     <div class="all-teams-status">
-        <h3>各チームの選択状況</h3>
+        <h3>全チームの獲得選手一覧</h3>
         <ul id="all-selections-list"></ul>
     </div>
 </main>
@@ -66,22 +66,30 @@
     const confirmedRef = database.ref('selectionConfirmed/' + teamId);
     const acquiredPlayersRef = database.ref('acquiredPlayers');
     const passedRef = database.ref('teamsPassed/' + teamId);
-    const allSelectionsRef = database.ref('currentSelections');
 
-    allSelectionsRef.on('value', (snapshot) => {
+    acquiredPlayersRef.on('value', (snapshot) => {
+        const allAcquiredData = snapshot.val() || {};
+        let acquiredPlayersList = [];
         const listElement = document.getElementById('all-selections-list');
         listElement.innerHTML = '';
-        const selections = snapshot.val() || {};
+
         teams.forEach((team, index) => {
-            const player = selections[team] || '未選択';
             const teamName = `チーム${index + 1}`;
-            const li = document.createElement('li');
-            li.textContent = `${teamName}: ${player}`;
-            if (team === teamId) {
-                li.style.fontWeight = 'bold';
+            const playersData = allAcquiredData[team];
+            let playersText = 'なし';
+
+            if (playersData) {
+                const teamPlayers = Object.values(playersData);
+                acquiredPlayersList = acquiredPlayersList.concat(teamPlayers);
+                playersText = teamPlayers.join(', ');
             }
+
+            const li = document.createElement('li');
+            li.textContent = `${teamName}: ${playersText}`;
             listElement.appendChild(li);
         });
+
+        updatePlayerOptions(acquiredPlayersList);
     });
 
     function updatePlayerOptions(acquiredPlayersList) {
@@ -97,15 +105,6 @@
         });
         selectElement.value = currentSelectedValue;
     }
-
-    acquiredPlayersRef.on('value', (snapshot) => {
-        const allAcquiredData = snapshot.val() || {};
-        let acquiredPlayersList = [];
-        for (const team in allAcquiredData) {
-            acquiredPlayersList = acquiredPlayersList.concat(Object.values(allAcquiredData[team]));
-        }
-        updatePlayerOptions(acquiredPlayersList);
-    });
 
     roundRef.on('value', (snapshot) => {
         const round = snapshot.val() || 1;
