@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="robots" content="noindex">
+    <link rel="stylesheet" href="style.css">
+    <style>
+        #status-message { margin-top: 15px; font-size: 1.1em; font-weight: bold; color: #d90429; height: 25px; }
+        #system-alert-overlay, #waiting-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.7); color: white; display: none;
+            justify-content: center; align-items: center; font-size: 2em;
+            text-align: center; z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+<div id="system-alert-overlay"></div>
+<div id="waiting-overlay">他のチームの選択が完了するまでお待ちください...</div>
+
+<main class="main" id="selection-main">
+    <h1 class="tytle" id="round-title">第一巡選択希望選手選択画面</h1>
+    <label for="pet-select">選択希望選手</label>
+    <form name="jstest">
+        <select name="pets" id="pet-select">
+            <option value="">--選手を選択してください--</option>
+        </select>
+    </form>
+    <input type="button" value="確定" onclick="submitSelection()"/>
+    <input type="button" value="選択を辞退" onclick="passSelection()" class="pass-button"/>
+    <div class="selected">選択選手： <span id="BtnTest"></span></div>
+    <div id="status-message"></div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+<script src="firebase-config.js"></script>
+<script>
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const teamId = 'team4';
+
+    const allPlayers = ["仙田", "新井", "上坂", "田中", "鵜飼", "布目", "冨高", "大寺"];
+
+    const roundRef = database.ref('round');
+    const selectionRef = database.ref('currentSelections/' + teamId);
+    const statusRef = database.ref('teamStatus/' + teamId);
+    const systemAlertRef = database.ref('systemAlert');
+    const confirmedRef = database.ref('selectionConfirmed/' + teamId);
+    const acquiredPlayersRef = database.ref('acquiredPlayers');
+      const passedRef = database.ref('teamsPassed/' + teamId);
+
+    function updatePlayerOptions(acquiredPlayersList) {
+        const selectElement = document.getElementById('pet-select');
+        const currentSelectedValue = selectElement.value;
+        selectElement.innerHTML = '<option value="">--選手を選択してください--</option>';
+
+        const availablePlayers = allPlayers.filter(player => !acquiredPlayersList.includes(player));
+
+        availablePlayers.forEach(player => {
+            const option = document.createElement('option');
+            option.value = player;
+            option.textContent = player;
+            selectElement.appendChild(option);
+        });
+        selectElement.value = currentSelectedValue;
+    }
+
+    acquiredPlayersRef.on('value', (snapshot) => {
+        const allAcquiredData = snapshot.val() || {};
+        let acquiredPlayersList = [];
+        for (const team in allAcquiredData) {
+            acquiredPlayersList = acquiredPlayersList.concat(Object.values(allAcquiredData[team]));
+        }
+        updatePlayerOptions(acquiredPlayersList);
+    });
+
+    roundRef.on('value', (snapshot) => {
+        const round = snapshot.val() || 1;
+        document.getElementById('round-title').textContent = `第${round}巡選択希望選手選択画面`;
+    });
+
+    selectionRef.on('value', (snapshot) => {
+        const selectedPlayer = snapshot.val();
+        document.getElementById("BtnTest").textContent = selectedPlayer || "未選択";
+        document.jstest.pets.value = selectedPlayer || "";
+    });
+
+    statusRef.on('value', (snapshot) => {
+        const message = snapshot.val();
+        const messageEl = document.getElementById('status-message');
+        if (message) {
+            messageEl.textContent = message;
+            setTimeout(() => {
+                messageEl.textContent = '';
+                statusRef.remove(); 
+            }, 5000);
+        }
+    });
+    
+    systemAlertRef.on('value', (snapshot) => {
+        const message = snapshot.val();
+        const overlay = document.getElementById('system-alert-overlay');
+        if (message) {
+            overlay.textContent = message;
+            overlay.style.display = 'flex';
+        } else {
+            overlay.style.display = 'none';
+        }
+    });
+
+    confirmedRef.on('value', (snapshot) => {
+        const isConfirmed = snapshot.val();
+        const mainContent = document.getElementById('selection-main');
+        const waitingOverlay = document.getElementById('waiting-overlay');
+        if (isConfirmed) {
+            mainContent.style.display = 'none';
+            waitingOverlay.style.display = 'flex';
+        } else {
+            mainContent.style.display = 'block';
+            waitingOverlay.style.display = 'none';
+        }
+    });
+
+    function submitSelection() {
+        const selectedPlayer = document.jstest.pets.value;
+        if (selectedPlayer) {
+            selectionRef.set(selectedPlayer)
+                .then(() => {
+                    alert('「' + selectedPlayer + '」選手を指名しました。');
+                });
+        } else {
+            selectionRef.remove();
+        }
+    }
+     passedRef.on('value', (snapshot) => {
+        const isPassed = snapshot.val();
+        const mainContent = document.getElementById('selection-main');
+        const waitingOverlay = document.getElementById('waiting-overlay');
+        if (isPassed) {
+            mainContent.style.display = 'none';
+            waitingOverlay.textContent = '選択を辞退しました。ドラフト終了までお待ちください。';
+            waitingOverlay.style.display = 'flex';
+        } else if (!document.getElementById('waiting-overlay').textContent.includes('他のチーム')) {
+            // 待機画面が表示されていない場合のみ選択画面に戻す
+            mainContent.style.display = 'block';
+            waitingOverlay.style.display = 'none';
+        }
+    });
+        // ★★★ 辞退ボタンを押したときの関数を新設 ★★★
+    function passSelection() {
+        if (confirm("この巡目以降の選手選択をすべて辞退します。よろしいですか？")) {
+            passedRef.set(true);
+            selectionRef.remove(); // 念のため現在の選択もクリア
+        }
+    }
+</script>
+</body>
+</html>
