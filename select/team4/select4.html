@@ -11,12 +11,27 @@
             justify-content: center; align-items: center; font-size: 2em;
             text-align: center; z-index: 1000;
         }
+        .pass-button { background-color: #6c757d; margin-left: 10px; }
+        .pass-button:hover { background-color: #5a6268; }
+        .all-teams-status {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .all-teams-status h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.2em;
+        }
+        .all-teams-status ul {
+            list-style-type: none;
+            padding: 0;
+            text-align: left;
+        }
     </style>
 </head>
 <body>
 <div id="system-alert-overlay"></div>
-<div id="waiting-overlay">他のチームの選択が完了するまでお待ちください...</div>
-
+<div id="waiting-overlay"></div>
 <main class="main" id="selection-main">
     <h1 class="tytle" id="round-title">第一巡選択希望選手選択画面</h1>
     <label for="pet-select">選択希望選手</label>
@@ -29,8 +44,11 @@
     <input type="button" value="選択を辞退" onclick="passSelection()" class="pass-button"/>
     <div class="selected">選択選手： <span id="BtnTest"></span></div>
     <div id="status-message"></div>
+    <div class="all-teams-status">
+        <h3>各チームの選択状況</h3>
+        <ul id="all-selections-list"></ul>
+    </div>
 </main>
-
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 <script src="firebase-config.js"></script>
@@ -38,7 +56,7 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
     const teamId = 'team4';
-
+    const teams = ['team1', 'team2', 'team3', 'team4']; 
     const allPlayers = ["仙田", "新井", "上坂", "田中", "鵜飼", "布目", "冨高", "大寺"];
 
     const roundRef = database.ref('round');
@@ -47,15 +65,30 @@
     const systemAlertRef = database.ref('systemAlert');
     const confirmedRef = database.ref('selectionConfirmed/' + teamId);
     const acquiredPlayersRef = database.ref('acquiredPlayers');
-      const passedRef = database.ref('teamsPassed/' + teamId);
+    const passedRef = database.ref('teamsPassed/' + teamId);
+    const allSelectionsRef = database.ref('currentSelections');
+
+    allSelectionsRef.on('value', (snapshot) => {
+        const listElement = document.getElementById('all-selections-list');
+        listElement.innerHTML = '';
+        const selections = snapshot.val() || {};
+        teams.forEach((team, index) => {
+            const player = selections[team] || '未選択';
+            const teamName = `チーム${index + 1}`;
+            const li = document.createElement('li');
+            li.textContent = `${teamName}: ${player}`;
+            if (team === teamId) {
+                li.style.fontWeight = 'bold';
+            }
+            listElement.appendChild(li);
+        });
+    });
 
     function updatePlayerOptions(acquiredPlayersList) {
         const selectElement = document.getElementById('pet-select');
         const currentSelectedValue = selectElement.value;
         selectElement.innerHTML = '<option value="">--選手を選択してください--</option>';
-
         const availablePlayers = allPlayers.filter(player => !acquiredPlayersList.includes(player));
-
         availablePlayers.forEach(player => {
             const option = document.createElement('option');
             option.value = player;
@@ -114,8 +147,23 @@
         const waitingOverlay = document.getElementById('waiting-overlay');
         if (isConfirmed) {
             mainContent.style.display = 'none';
+            waitingOverlay.textContent = '他のチームの選択が完了するまでお待ちください...';
             waitingOverlay.style.display = 'flex';
-        } else {
+        } else if (!waitingOverlay.textContent.includes('辞退')) {
+            mainContent.style.display = 'block';
+            waitingOverlay.style.display = 'none';
+        }
+    });
+
+    passedRef.on('value', (snapshot) => {
+        const isPassed = snapshot.val();
+        const mainContent = document.getElementById('selection-main');
+        const waitingOverlay = document.getElementById('waiting-overlay');
+        if (isPassed) {
+            mainContent.style.display = 'none';
+            waitingOverlay.textContent = '選択を辞退しました。ドラフト終了までお待ちください。';
+            waitingOverlay.style.display = 'flex';
+        } else if (!waitingOverlay.textContent.includes('他のチーム')) {
             mainContent.style.display = 'block';
             waitingOverlay.style.display = 'none';
         }
@@ -132,32 +180,18 @@
             selectionRef.remove();
         }
     }
-     passedRef.on('value', (snapshot) => {
-        const isPassed = snapshot.val();
-        const mainContent = document.getElementById('selection-main');
-        const waitingOverlay = document.getElementById('waiting-overlay');
-        if (isPassed) {
-            mainContent.style.display = 'none';
-            waitingOverlay.textContent = '選択を辞退しました。ドラフト終了までお待ちください。';
-            waitingOverlay.style.display = 'flex';
-        } else if (!document.getElementById('waiting-overlay').textContent.includes('他のチーム')) {
-            // 待機画面が表示されていない場合のみ選択画面に戻す
-            mainContent.style.display = 'block';
-            waitingOverlay.style.display = 'none';
-        }
-    });
-        // ★★★ 辞退ボタンを押したときの関数を新設 ★★★
+
     function passSelection() {
         if (confirm("この巡目以降の選手選択をすべて辞退します。よろしいですか？")) {
             passedRef.set(true);
-            selectionRef.remove(); // 念のため現在の選択もクリア
+            selectionRef.remove();
         }
     }
-    // ▼▼▼ 戻るボタン無効化 ▼▼▼
-history.pushState(null, null, location.href);
-window.addEventListener('popstate', function(e) {
-    history.go(1);
-});
+
+    history.pushState(null, null, location.href);
+    window.addEventListener('popstate', function(e) {
+        history.go(1);
+    });
 </script>
 </body>
 </html>
