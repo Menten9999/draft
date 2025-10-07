@@ -6,6 +6,9 @@
     <style>
         .reset-button { background-color: #dc3545; margin-left: 15px; }
         .reset-button:hover { background-color: #c82333; }
+        .lottery-button { background-color: #ffc107; color: black; }
+        .lottery-button:hover { background-color: #e0a800; }
+        #lottery-status-container { margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; }
     </style>
 </head>
 <body>
@@ -21,19 +24,18 @@
             <ul id="acquired-players-list"></ul>
         </div>
     </div>
+    <div id="lottery-status-container"></div>
     <div class="controls">
-        <button onclick="processSelectionsAndLottery()">選択を処理（競合時は抽選）</button>
+        <button onclick="processSelections()">選択を処理</button>
         <button onclick="resetAllData()" class="reset-button">ドラフトをリセット</button>
     </div>
 </main>
-
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 <script src="firebase-config.js"></script>
 <script>
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
-    // ★★★ チームリストを4チームに拡大 ★★★
     const teams = ['team1', 'team2', 'team3', 'team4']; 
 
     const roundRef = database.ref('round');
@@ -43,8 +45,12 @@
     const systemAlertRef = database.ref('systemAlert');
     const selectionConfirmedRef = database.ref('selectionConfirmed');
     const teamsPassedRef = database.ref('teamsPassed');
+    const lotteryRef = database.ref('lotteries');
 
-    // ★★★ 表示ロジックを4チーム対応に修正 ★★★
+    roundRef.on('value', snapshot => {
+        document.getElementById('round-number').textContent = snapshot.val() || 1;
+    });
+
     currentSelectionsRef.on('value', snapshot => {
         const list = document.getElementById('current-selection-list');
         list.innerHTML = '';
@@ -71,20 +77,40 @@
         });
     });
 
-    roundRef.on('value', snapshot => {
-        document.getElementById('round-number').textContent = snapshot.val() || 1;
+    lotteryRef.on('value', (snapshot) => {
+        const lotteries = snapshot.val() || {};
+        const container = document.getElementById('lottery-status-container');
+        container.innerHTML = '';
+
+        for (const player in lotteries) {
+            const lotteryData = lotteries[player];
+            const competingTeams = Object.keys(lotteryData.competingTeams);
+            const picks = lotteryData.picks || {};
+            const picksCount = Object.keys(picks).length;
+
+            const statusDiv = document.createElement('div');
+            statusDiv.innerHTML = `<h3>抽選: ${player}</h3><p>くじ引き状況: ${picksCount} / ${competingTeams.length}</p>`;
+
+            if (picksCount === competingTeams.length) {
+                const revealButton = document.createElement('button');
+                revealButton.textContent = `「${player}」の抽選結果を開票`;
+                revealButton.className = 'lottery-button';
+                revealButton.onclick = () => revealLotteryResults(player);
+                statusDiv.appendChild(revealButton);
+            }
+            container.appendChild(statusDiv);
+        }
     });
 
-    async function processSelectionsAndLottery() {
+    async function processSelections() {
         const selectionsSnapshot = await currentSelectionsRef.once('value');
         const selections = selectionsSnapshot.val() || {};
         const confirmedSnapshot = await selectionConfirmedRef.once('value');
         const confirmed = confirmedSnapshot.val() || {};
         const passedSnapshot = await teamsPassedRef.once('value');
         const passed = passedSnapshot.val() || {};
-
         const activeTeams = teams.filter(team => !confirmed[team] && !passed[team]);
-
+        
         if (Object.keys(selections).length < activeTeams.length) {
             alert("まだ選択を終えていないチームがいます。");
             return;
@@ -108,31 +134,21 @@
         }
 
         if (Object.keys(conflicts).length > 0) {
-            await systemAlertRef.set("競合が発生しました。ただいまから抽選を行います...");
-            if (!confirm("競合が発生しました。抽選に移行しますか？")) {
-                await systemAlertRef.remove();
-                alert("抽選はキャンセルされました。");
-                return;
-            }
-
-            let alertLog = "抽選結果：\n";
+            await systemAlertRef.set("競合が発生しました。抽選画面に移行します。");
             for (const player in conflicts) {
                 const competingTeams = conflicts[player];
-                const winner = competingTeams[Math.floor(Math.random() * competingTeams.length)];
-                
-                alertLog += `\n[選手: ${player}] -> 当選: ${winner}！\n`;
+                const lots = competingTeams.map((_, index) => ({ id: index, isPicked: false }));
+                const winnerIndex = Math.floor(Math.random() * competingTeams.length);
+                lots[winnerIndex].isWinner = true;
 
-                await acquiredPlayersRef.child(winner).push(player);
-                for (const teamId of competingTeams) {
-                    if (teamId === winner) {
-                        await teamStatusRef.child(teamId).set("交渉権獲得");
-                        await selectionConfirmedRef.child(teamId).set(true);
-                    } else {
-                        await teamStatusRef.child(teamId).set("落選しました。再度選手を選択してください");
-                    }
-                }
+                const competingTeamsObj = {};
+                competingTeams.forEach(team => { competingTeamsObj[team] = true; });
+
+                await lotteryRef.child(player).set({
+                    competingTeams: competingTeamsObj,
+                    lots: lots
+                });
             }
-             alert(alertLog);
         } else {
             alert("競合はありませんでした。全チームの選択を確定します。");
         }
@@ -145,6 +161,53 @@
         }
         
         await currentSelectionsRef.remove();
+        
+        if (Object.keys(conflicts).length === 0) {
+            const finalConfirmedSnapshot = await selectionConfirmedRef.once('value');
+            const finalPassedSnapshot = await teamsPassedRef.once('value');
+            const finalConfirmedCount = finalConfirmedSnapshot.val() ? Object.keys(finalConfirmedSnapshot.val()).length : 0;
+            const finalPassedCount = finalPassedSnapshot.val() ? Object.keys(finalPassedSnapshot.val()).length : 0;
+            
+            if (finalConfirmedCount + finalPassedCount === teams.length) {
+                const roundSnapshot = await roundRef.once('value');
+                const nextRound = (roundSnapshot.val() || 1) + 1;
+                
+                await roundRef.set(nextRound);
+                await teamStatusRef.remove();
+                await selectionConfirmedRef.remove();
+                
+                alert(`全アクティブチームの選択が確定しました。第${nextRound}巡に移行します。`);
+            }
+        }
+    }
+
+    async function revealLotteryResults(player) {
+        const lotterySnapshot = await lotteryRef.child(player).once('value');
+        const lotteryData = lotterySnapshot.val();
+        if (!lotteryData) return;
+
+        const winningLot = lotteryData.lots.find(lot => lot.isWinner);
+        let winnerTeam = null;
+
+        for (const teamId in lotteryData.picks) {
+            if (lotteryData.picks[teamId] === winningLot.id) {
+                winnerTeam = teamId;
+                break;
+            }
+        }
+
+        await acquiredPlayersRef.child(winnerTeam).push(player);
+
+        for (const teamId of Object.keys(lotteryData.competingTeams)) {
+            if (teamId === winnerTeam) {
+                await teamStatusRef.child(teamId).set("交渉権獲得");
+                await selectionConfirmedRef.child(teamId).set(true);
+            } else {
+                await teamStatusRef.child(teamId).set("落選しました。再度選手を選択してください");
+            }
+        }
+
+        await lotteryRef.child(player).remove();
         await systemAlertRef.remove();
 
         const finalConfirmedSnapshot = await selectionConfirmedRef.once('value');
@@ -163,7 +226,7 @@
             alert(`全アクティブチームの選択が確定しました。第${nextRound}巡に移行します。`);
         }
     }
-        
+    
     async function resetAllData() {
         const confirmationText = "delete";
         const userInput = prompt(`警告：すべてのドラフトデータが完全に削除されます。「${confirmationText}」と入力してください。`);
@@ -175,11 +238,11 @@
             alert("入力が間違っています。");
         }
     }
-    // ▼▼▼ 戻るボタン無効化 ▼▼▼
-history.pushState(null, null, location.href);
-window.addEventListener('popstate', function(e) {
-    history.go(1);
-});
+
+    history.pushState(null, null, location.href);
+    window.addEventListener('popstate', function(e) {
+        history.go(1);
+    });
 </script>
 </body>
 </html>
