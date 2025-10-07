@@ -170,13 +170,16 @@
 
     function submitSelection() {
         const selectedPlayer = document.jstest.pets.value;
+        // 選手が選択されているか確認
         if (selectedPlayer) {
-            selectionRef.set(selectedPlayer)
-                .then(() => {
-                    alert('「' + selectedPlayer + '」選手を指名しました。');
-                });
+            // ★★★ 確認ダイアログを追加 ★★★
+            if (confirm('「' + selectedPlayer + '」選手でよろしいですか？')) {
+                // 「OK」が押された場合のみ、Firebaseにデータを送信
+                selectionRef.set(selectedPlayer);
+            }
         } else {
-            selectionRef.remove();
+            // 選手が選択されていない場合はアラートを表示
+            alert('選手を選択してください。');
         }
     }
 
