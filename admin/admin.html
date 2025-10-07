@@ -175,6 +175,11 @@
             alert("入力が間違っています。");
         }
     }
+    // ▼▼▼ 戻るボタン無効化 ▼▼▼
+history.pushState(null, null, location.href);
+window.addEventListener('popstate', function(e) {
+    history.go(1);
+});
 </script>
 </body>
 </html>
