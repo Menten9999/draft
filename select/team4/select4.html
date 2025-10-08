@@ -44,6 +44,7 @@
             transition: transform 0.5s 0.2s;
         }
         .envelope.opened #result-image { transform: translateY(0); }
+        #lottery-turn-info { font-size: 1.5em; margin-bottom: 20px; }
     </style>
 </head>
 <body>
@@ -51,7 +52,8 @@
 <div id="waiting-overlay"></div>
 <div id="lottery-overlay">
     <h2 id="lottery-player-name"></h2>
-    <p>他のチームと指名が競合しました。くじを1つ選択してください。</p>
+    <p>他のチームと指名が競合しました。</p>
+    <p id="lottery-turn-info"></p>
     <div id="lottery-box"></div>
 </div>
 <div id="result-overlay">
@@ -107,30 +109,43 @@
 
         for (const player in lotteries) {
             const lotteryData = lotteries[player];
-            if (lotteryData.isRevealing) {
-                resultOverlay.style.display = 'flex';
-                resultOverlay.querySelector('.envelope').classList.remove('opened');
-                lotteryOverlay.style.display = 'none';
-                return;
-            }
-
             if (lotteryData.competingTeams[teamId]) {
+                 if (lotteryData.isRevealing) {
+                    resultOverlay.style.display = 'flex';
+                    resultOverlay.querySelector('.envelope').classList.remove('opened');
+                    lotteryOverlay.style.display = 'none';
+                    return; 
+                }
                 isMyLottery = true;
                 document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
+                
+                const turnIndex = lotteryData.turnIndex || 0;
+                const turnInfo = document.getElementById('lottery-turn-info');
+                
+                if (turnIndex >= lotteryData.pickOrder.length) {
+                    turnInfo.textContent = '全員の選択が完了しました。開票をお待ちください。';
+                } else {
+                    const currentTurnTeamId = lotteryData.pickOrder[turnIndex];
+                    const currentTurnTeamName = `チーム${teams.indexOf(currentTurnTeamId) + 1}`;
+                    turnInfo.textContent = `次は ${currentTurnTeamName} の番です。`;
+                }
+
+                const myTurn = lotteryData.pickOrder[turnIndex] === teamId;
                 const lotteryBox = document.getElementById('lottery-box');
                 lotteryBox.innerHTML = '';
                 const myPick = lotteryData.picks ? lotteryData.picks[teamId] : undefined;
+                
                 lotteryData.lots.forEach(lot => {
                     const button = document.createElement('button');
                     button.className = 'lot-button';
                     button.textContent = `くじ ${lot.id + 1}`;
                     button.onclick = () => drawLot(player, lot.id);
-                    if (lot.isPicked || myPick !== undefined) {
+                    if (!myTurn || lot.isPicked || myPick !== undefined) {
                         button.disabled = true;
                     }
                     lotteryBox.appendChild(button);
                 });
-                overlay.style.display = 'flex';
+                lotteryOverlay.style.display = 'flex';
                 break;
             }
         }
@@ -162,14 +177,19 @@
     }
 
     async function drawLot(player, lotId) {
-        const lotButtonRef = lotteryRef.child(player).child('lots').child(lotId).child('isPicked');
-        const pickRef = lotteryRef.child(player).child('picks').child(teamId);
+        const lotteryPlayerRef = lotteryRef.child(player);
+        const lotButtonRef = lotteryPlayerRef.child('lots').child(lotId).child('isPicked');
+        const pickRef = lotteryPlayerRef.child('picks').child(teamId);
+        
         await lotButtonRef.transaction(currentValue => {
             if (currentValue === true) { return; }
             return true;
-        }).then(result => {
+        }).then(async (result) => {
             if (result.committed) {
-                pickRef.set(lotId);
+                await pickRef.set(lotId);
+                const turnIndexSnapshot = await lotteryPlayerRef.child('turnIndex').once('value');
+                const nextTurnIndex = (turnIndexSnapshot.val() || 0) + 1;
+                await lotteryPlayerRef.child('turnIndex').set(nextTurnIndex);
             } else {
                 alert("他のチームに先に選択されました。別のくじを選んでください。");
             }

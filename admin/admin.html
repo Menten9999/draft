@@ -146,7 +146,9 @@
 
                 await lotteryRef.child(player).set({
                     competingTeams: competingTeamsObj,
-                    lots: lots
+                    lots: lots,
+                    pickOrder: [...competingTeams].sort(() => Math.random() - 0.5),
+                    turnIndex: 0
                 });
             }
         } else {
@@ -182,52 +184,57 @@
     }
 
     async function revealLotteryResults(player) {
-        await lotteryRef.child(player).child('isRevealing').set(true);
         document.querySelectorAll('.lottery-button').forEach(b => b.disabled = true);
 
         const lotterySnapshot = await lotteryRef.child(player).once('value');
         const lotteryData = lotterySnapshot.val();
         if (!lotteryData) return;
 
-        const winningLot = lotteryData.lots.find(lot => lot.isWinner);
-        let winnerTeam = null;
+        await lotteryRef.child(player).child('isRevealing').set(true);
 
-        for (const teamId in lotteryData.picks) {
-            if (lotteryData.picks[teamId] === winningLot.id) {
-                winnerTeam = teamId;
-                break;
+        setTimeout(async () => {
+            const winningLot = lotteryData.lots.find(lot => lot.isWinner);
+            let winnerTeam = null;
+
+            for (const teamId in lotteryData.picks) {
+                if (lotteryData.picks[teamId] === winningLot.id) {
+                    winnerTeam = teamId;
+                    break;
+                }
             }
-        }
 
-        await acquiredPlayersRef.child(winnerTeam).push(player);
+            await acquiredPlayersRef.child(winnerTeam).push(player);
 
-        for (const teamId of Object.keys(lotteryData.competingTeams)) {
-            if (teamId === winnerTeam) {
-                await teamStatusRef.child(teamId).set("交渉権獲得");
-                await selectionConfirmedRef.child(teamId).set(true);
-            } else {
-                await teamStatusRef.child(teamId).set("落選しました。再度選手を選択してください");
+            for (const teamId of Object.keys(lotteryData.competingTeams)) {
+                if (teamId === winnerTeam) {
+                    await teamStatusRef.child(teamId).set("交渉権獲得");
+                    await selectionConfirmedRef.child(teamId).set(true);
+                } else {
+                    await teamStatusRef.child(teamId).set("落選しました。再度選手を選択してください");
+                }
             }
-        }
 
-        await lotteryRef.child(player).remove();
-        await systemAlertRef.remove();
+            setTimeout(async () => {
+                await lotteryRef.child(player).remove();
+                await systemAlertRef.remove();
 
-        const finalConfirmedSnapshot = await selectionConfirmedRef.once('value');
-        const finalPassedSnapshot = await teamsPassedRef.once('value');
-        const finalConfirmedCount = finalConfirmedSnapshot.val() ? Object.keys(finalConfirmedSnapshot.val()).length : 0;
-        const finalPassedCount = finalPassedSnapshot.val() ? Object.keys(finalPassedSnapshot.val()).length : 0;
-        
-        if (finalConfirmedCount + finalPassedCount === teams.length) {
-            const roundSnapshot = await roundRef.once('value');
-            const nextRound = (roundSnapshot.val() || 1) + 1;
-            
-            await roundRef.set(nextRound);
-            await teamStatusRef.remove();
-            await selectionConfirmedRef.remove();
-            
-            alert(`全アクティブチームの選択が確定しました。第${nextRound}巡に移行します。`);
-        }
+                const finalConfirmedSnapshot = await selectionConfirmedRef.once('value');
+                const finalPassedSnapshot = await teamsPassedRef.once('value');
+                const finalConfirmedCount = finalConfirmedSnapshot.val() ? Object.keys(finalConfirmedSnapshot.val()).length : 0;
+                const finalPassedCount = finalPassedSnapshot.val() ? Object.keys(finalPassedSnapshot.val()).length : 0;
+                
+                if (finalConfirmedCount + finalPassedCount === teams.length) {
+                    const roundSnapshot = await roundRef.once('value');
+                    const nextRound = (roundSnapshot.val() || 1) + 1;
+                    
+                    await roundRef.set(nextRound);
+                    await teamStatusRef.remove();
+                    await selectionConfirmedRef.remove();
+                    
+                    alert(`全アクティブチームの選択が確定しました。第${nextRound}巡に移行します。`);
+                }
+            }, 3500);
+        }, 500);
     }
     
     async function resetAllData() {
