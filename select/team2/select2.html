@@ -107,16 +107,27 @@
         const resultOverlay = document.getElementById('result-overlay');
         let isMyLottery = false;
 
+        if (Object.keys(lotteries).length === 0) {
+            lotteryOverlay.style.display = 'none';
+            resultOverlay.style.display = 'none';
+            return;
+        }
+
         for (const player in lotteries) {
             const lotteryData = lotteries[player];
             if (lotteryData.competingTeams[teamId]) {
-                 if (lotteryData.isRevealing) {
+                isMyLottery = true;
+                if (lotteryData.isRevealing) {
                     resultOverlay.style.display = 'flex';
-                    resultOverlay.querySelector('.envelope').classList.remove('opened');
+                    const envelope = resultOverlay.querySelector('.envelope');
+                    if (!envelope.classList.contains('opened')) {
+                         document.getElementById('result-image').src = '';
+                    }
+                    envelope.classList.remove('opened');
                     lotteryOverlay.style.display = 'none';
                     return; 
                 }
-                isMyLottery = true;
+                
                 document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
                 
                 const turnIndex = lotteryData.turnIndex || 0;

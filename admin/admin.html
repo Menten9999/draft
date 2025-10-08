@@ -91,7 +91,7 @@
             const statusDiv = document.createElement('div');
             statusDiv.innerHTML = `<h3>抽選: ${player}</h3><p>くじ引き状況: ${picksCount} / ${competingTeams.length}</p>`;
 
-            if (picksCount === competingTeams.length) {
+            if (picksCount === competingTeams.length && !lotteryData.isRevealing) {
                 const revealButton = document.createElement('button');
                 revealButton.textContent = `「${player}」の抽選結果を開票`;
                 revealButton.className = 'lottery-button';
@@ -233,7 +233,7 @@
                     
                     alert(`全アクティブチームの選択が確定しました。第${nextRound}巡に移行します。`);
                 }
-            }, 3500);
+            }, 20500); // 20.5秒後（クライアントの演出＋α）
         }, 500);
     }
     
