@@ -182,6 +182,9 @@
     }
 
     async function revealLotteryResults(player) {
+        await lotteryRef.child(player).child('isRevealing').set(true);
+        document.querySelectorAll('.lottery-button').forEach(b => b.disabled = true);
+
         const lotterySnapshot = await lotteryRef.child(player).once('value');
         const lotteryData = lotterySnapshot.val();
         if (!lotteryData) return;

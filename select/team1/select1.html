@@ -5,13 +5,13 @@
     <link rel="stylesheet" href="style.css">
     <style>
         #status-message { margin-top: 15px; font-size: 1.1em; font-weight: bold; color: #d90429; height: 25px; }
-        #system-alert-overlay, #waiting-overlay, #lottery-overlay {
+        #system-alert-overlay, #waiting-overlay, #lottery-overlay, #result-overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(0, 0, 0, 0.9); color: white; display: none;
             justify-content: center; align-items: center; z-index: 1000;
             text-align: center;
         }
-        #lottery-overlay { flex-direction: column; }
+        #lottery-overlay, #result-overlay { flex-direction: column; }
         .pass-button { background-color: #6c757d; margin-left: 10px; }
         .pass-button:hover { background-color: #5a6268; }
         .all-teams-status { margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; }
@@ -23,6 +23,27 @@
             border: 2px solid white; background-color: #495057; color: white; border-radius: 10px;
         }
         .lot-button:disabled { cursor: not-allowed; background-color: #343a40; opacity: 0.6; }
+        #result-overlay { perspective: 1000px; }
+        .envelope {
+            position: relative; width: 300px; height: 200px;
+            background-color: #f0e68c; border-radius: 5px; cursor: pointer;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+        .envelope-flap {
+            position: absolute; top: 0; left: 0; width: 100%; height: 50%;
+            background-color: #f0e68c; transform-origin: top;
+            transition: transform 0.5s; clip-path: polygon(0 0, 100% 0, 50% 100%);
+        }
+        .envelope.opened .envelope-flap { transform: rotateX(-180deg); }
+        .result-image-container {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: flex; justify-content: center; align-items: center;
+        }
+        #result-image {
+            width: 80%; transform: translateY(100%);
+            transition: transform 0.5s 0.2s;
+        }
+        .envelope.opened #result-image { transform: translateY(0); }
     </style>
 </head>
 <body>
@@ -32,6 +53,15 @@
     <h2 id="lottery-player-name"></h2>
     <p>他のチームと指名が競合しました。くじを1つ選択してください。</p>
     <div id="lottery-box"></div>
+</div>
+<div id="result-overlay">
+    <h2>結果を開封してください</h2>
+    <div class="envelope" onclick="openEnvelope()">
+        <div class="envelope-flap"></div>
+        <div class="result-image-container">
+            <img id="result-image" src="" alt="抽選結果">
+        </div>
+    </div>
 </div>
 <main class="main" id="selection-main">
     <h1 class="tytle" id="round-title">第一巡選択希望選手選択画面</h1>
@@ -71,10 +101,19 @@
 
     lotteryRef.on('value', (snapshot) => {
         const lotteries = snapshot.val() || {};
-        const overlay = document.getElementById('lottery-overlay');
+        const lotteryOverlay = document.getElementById('lottery-overlay');
+        const resultOverlay = document.getElementById('result-overlay');
         let isMyLottery = false;
+
         for (const player in lotteries) {
             const lotteryData = lotteries[player];
+            if (lotteryData.isRevealing) {
+                resultOverlay.style.display = 'flex';
+                resultOverlay.querySelector('.envelope').classList.remove('opened');
+                lotteryOverlay.style.display = 'none';
+                return;
+            }
+
             if (lotteryData.competingTeams[teamId]) {
                 isMyLottery = true;
                 document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
@@ -96,9 +135,31 @@
             }
         }
         if (!isMyLottery) {
-            overlay.style.display = 'none';
+            lotteryOverlay.style.display = 'none';
         }
     });
+    
+    statusRef.on('value', (snapshot) => {
+        const message = snapshot.val();
+        if (!message) return;
+
+        const resultImage = document.getElementById('result-image');
+        if (message === "交渉権獲得") {
+            resultImage.src = 'atari.png';
+        } else if (message.includes("落選")) {
+            resultImage.src = 'hazure.png';
+        }
+    });
+
+    function openEnvelope() {
+        const envelope = document.querySelector('.envelope');
+        if (envelope.classList.contains('opened')) return;
+        envelope.classList.add('opened');
+        setTimeout(() => {
+            document.getElementById('result-overlay').style.display = 'none';
+            statusRef.remove();
+        }, 3000);
+    }
 
     async function drawLot(player, lotId) {
         const lotButtonRef = lotteryRef.child(player).child('lots').child(lotId).child('isPicked');
@@ -159,18 +220,6 @@
         const selectedPlayer = snapshot.val();
         document.getElementById("BtnTest").textContent = selectedPlayer || "未選択";
         document.jstest.pets.value = selectedPlayer || "";
-    });
-
-    statusRef.on('value', (snapshot) => {
-        const message = snapshot.val();
-        const messageEl = document.getElementById('status-message');
-        if (message) {
-            messageEl.textContent = message;
-            setTimeout(() => {
-                messageEl.textContent = '';
-                statusRef.remove(); 
-            }, 5000);
-        }
     });
     
     systemAlertRef.on('value', (snapshot) => {
