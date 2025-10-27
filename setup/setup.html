@@ -25,6 +25,10 @@
 		<label>候補選手（改行で1選手ずつ）
 			<textarea id="candidates" rows="6" placeholder="仙田&#10;新井&#10;上坂"></textarea>
 		</label>
+		<!-- 追加: ウェイバー方式チェック -->
+		<div>
+			<label><input type="checkbox" id="waiver-checkbox"> ウェイバー方式を使用する</label>
+		</div>
 		<div class="row">
 			<button type="button" id="save-btn">保存して初期化</button>
 			<button type="button" id="clear-btn">draftConfig を削除</button>
@@ -61,7 +65,11 @@
 
 			const config = {
 				teams,
-				candidates: candLines
+				candidates: candLines,
+				// ウェイバー方式の有無を保存
+				waiverEnabled: !!document.getElementById('waiver-checkbox').checked,
+				// 初期ウェイバー順は teams の id 配列で追加（既存コード）
+				waiverOrder: teams.map(t => t.id)
 			};
 
 			try {
@@ -95,6 +103,16 @@
 				$status.textContent = '削除に失敗しました。';
 			}
 		});
+
+		// ページ読み込み時に既存設定を反映する場合の処理（あれば）：
+		(async () => {
+			const snap = await db.ref('draftConfig').once('value');
+			const cfg = snap.val() || {};
+			if (cfg.waiverEnabled) {
+				const cb = document.getElementById('waiver-checkbox');
+				if (cb) cb.checked = true;
+			}
+		})();
 	</script>
 </body>
 </html>

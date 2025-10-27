@@ -106,17 +106,21 @@
 
     // draftConfig を監視して設定を反映（admin/setup.html で保存される）
     const configRef = database.ref('draftConfig');
+    const waiverRef = database.ref('draftConfig/waiverOrder');
+    let waiverEnabled = false;
     configRef.on('value', (snap) => {
-        const cfg = snap.val();
-        if (cfg && Array.isArray(cfg.teams)) {
+        const cfg = snap.val() || {};
+        if (Array.isArray(cfg.teams)) {
             teams = cfg.teams.map(t => t.id);
-            teamNames = {};
-            cfg.teams.forEach((t, i) => { teamNames[t.id] = t.name || `チーム${i+1}`; });
+            teamNames = {}; cfg.teams.forEach((t,i)=> teamNames[t.id]=t.name || `チーム${i+1}`);
         }
         if (cfg && Array.isArray(cfg.candidates)) {
             allPlayers = cfg.candidates.slice();
         }
+        // ウェイバー方式の有無を保持
+        waiverEnabled = !!cfg.waiverEnabled;
         // UI 更新（acquiredPlayers の表示や選択肢）
+        updatePlayerOptions(acquiredPlayersListGlobal);
     });
 
     const roundRef = database.ref('round');
@@ -213,6 +217,16 @@
         const resultImage = document.getElementById('result-image');
         if (message === "交渉権獲得") {
             resultImage.src = 'atari.png';
+            // ウェイバー順を自チームを末尾に移動して更新（原子）
+            waiverRef.transaction(current => {
+                if (!Array.isArray(current)) return current;
+                const idx = current.indexOf(teamId);
+                if (idx !== -1) {
+                    current.splice(idx, 1);
+                    current.push(teamId);
+                }
+                return current;
+            }).catch(()=>{});
         } else if (message.includes("落選")) {
             resultImage.src = 'hazure.png';
         }

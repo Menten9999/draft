@@ -102,13 +102,29 @@
     let teamNames = {};
     let allPlayers = ["仙田", "新井", "上坂", "田中", "鵜飼", "布目", "冨高", "大寺"];
     const configRef = database.ref('draftConfig');
+    const waiverRef = database.ref('draftConfig/waiverOrder');
+    let waiverEnabled = false;
     configRef.on('value', (snap) => {
-        const cfg = snap.val();
-        if (cfg && Array.isArray(cfg.teams)) {
+        const cfg = snap.val() || {};
+        if (Array.isArray(cfg.teams)) {
             teams = cfg.teams.map(t => t.id);
-            teamNames = {}; cfg.teams.forEach((t,i)=> teamNames[t.id]=t.name || `チーム${i+1}`);
+            teamNames = {};
+            cfg.teams.forEach((t, i) => { teamNames[t.id] = t.name || `チーム${i+1}`; });
         }
-        if (cfg && Array.isArray(cfg.candidates)) allPlayers = cfg.candidates.slice();
+        if (Array.isArray(cfg.candidates)) {
+            allPlayers = cfg.candidates.slice();
+        }
+        updatePlayerOptions(acquiredPlayersListGlobal || []);
+        waiverEnabled = !!cfg.waiverEnabled;
+        const waiverEl = document.getElementById('waiver-order');
+        if (waiverEl) {
+            waiverEl.innerHTML = '';
+            (cfg.waiverOrder || []).forEach(id => {
+                const li = document.createElement('li');
+                li.textContent = teamNames[id] || id;
+                waiverEl.appendChild(li);
+            });
+        }
     });
 
     const roundRef = database.ref('round');
@@ -203,6 +219,17 @@
         const resultImage = document.getElementById('result-image');
         if (message === "交渉権獲得") {
             resultImage.src = 'atari.png';
+            if (waiverEnabled) {
+                waiverRef.transaction(current => {
+                    if (!Array.isArray(current)) return current;
+                    const idx = current.indexOf(teamId);
+                    if (idx !== -1) {
+                        current.splice(idx, 1);
+                        current.push(teamId);
+                    }
+                    return current;
+                }).catch(()=>{});
+            }
         } else if (message.includes("落選")) {
             resultImage.src = 'hazure.png';
         }

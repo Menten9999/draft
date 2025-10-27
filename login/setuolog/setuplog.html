@@ -15,8 +15,9 @@
     </main>
     <script>
     function check(){
-        if(document.getElementById("password-input").value=="arai"){
-            location.href = '../../setup/setup.html';
+        if(document.getElementById("password-input").value === "arai"){
+            // 管理者ダッシュボードへ遷移（ダッシュボード側で draftConfig を参照してセットアップ画面へ遷移可能）
+            location.href = '../../admin/admin.html';
         } else {
             alert("パスワードが違います");
         }
