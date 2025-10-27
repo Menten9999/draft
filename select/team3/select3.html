@@ -127,25 +127,24 @@
             if (lotteryData.competingTeams[teamId]) {
                 isMyLottery = true;
                 if (lotteryData.isRevealing) {
-                    // show result overlay and ensure the correct image is set BEFORE opening
-                    resultOverlay.style.display = 'flex';
-                    const envelope = resultOverlay.querySelector('.envelope');
-                    // ensure closed state visually
-                    envelope.classList.remove('opened');
-                    // set result image based on current team status (ensure immediate visibility)
-                    statusRef.once('value').then(snapshot => {
-                        const message = snapshot.val();
-                        const resultImage = document.getElementById('result-image');
+                    const resultImage = document.getElementById('result-image');
+                    statusRef.once('value').then(snap => {
+                        const message = snap.val();
                         if (message === "交渉権獲得") {
                             resultImage.src = 'atari.png';
                         } else if (message && message.includes("落選")) {
                             resultImage.src = 'hazure.png';
                         } else {
-                            // fallback: keep previous or empty
+                            resultImage.src = '';
                         }
+
+                        resultOverlay.style.display = 'flex';
+                        const envelope = resultOverlay.querySelector('.envelope');
+                        envelope.classList.remove('opened');
+                        setTimeout(() => openEnvelope(), 200);
                     });
                     lotteryOverlay.style.display = 'none';
-                    return; 
+                    return;
                 }
                 
                 document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
@@ -199,61 +198,62 @@
 
     function openEnvelope() {
         const envelope = document.querySelector('.envelope');
+        const resultImage = document.getElementById('result-image');
         if (!envelope || envelope.classList.contains('opened')) return;
 
-        // disable clicks while animating
         envelope.style.pointerEvents = 'none';
 
-        // ensure the image is already set from statusRef; then animate
         statusRef.once('value').then(snapshot => {
             const message = snapshot.val();
-            const resultImage = document.getElementById('result-image');
             if (message === "交渉権獲得") {
                 resultImage.src = 'atari.png';
             } else if (message && message.includes("落選")) {
                 resultImage.src = 'hazure.png';
             }
 
-            // force reflow to ensure CSS transition will run
             void envelope.offsetWidth;
             envelope.classList.add('opened');
 
-            // wait until the image transition completes, then hide overlay shortly after
-            const onTransitionEnd = (e) => {
+            const onEnd = (e) => {
                 if (e.target && e.target.id === 'result-image') {
-                    // give user a short time to view result, then close
                     setTimeout(() => {
                         document.getElementById('result-overlay').style.display = 'none';
-                        // remove the status node so UI can reset for next reveal
                         statusRef.remove().catch(()=>{});
                         envelope.classList.remove('opened');
                         envelope.style.pointerEvents = '';
-                    }, 1400);
-                    envelope.removeEventListener('transitionend', onTransitionEnd, true);
+                    }, 900);
                 }
             };
-            envelope.addEventListener('transitionend', onTransitionEnd, true);
+            resultImage.addEventListener('transitionend', onEnd, { once: true });
         });
     }
 
     async function drawLot(player, lotId) {
         const lotteryPlayerRef = lotteryRef.child(player);
-        const lotButtonRef = lotteryPlayerRef.child('lots').child(lotId).child('isPicked');
+        const lotPickedRef = lotteryPlayerRef.child('lots').child(lotId).child('isPicked');
         const pickRef = lotteryPlayerRef.child('picks').child(teamId);
-        
-        await lotButtonRef.transaction(currentValue => {
-            if (currentValue === true) { return; }
-            return true;
-        }).then(async (result) => {
-            if (result.committed) {
-                await pickRef.set(lotId);
-                const turnIndexSnapshot = await lotteryPlayerRef.child('turnIndex').once('value');
-                const nextTurnIndex = (turnIndexSnapshot.val() || 0) + 1;
-                await lotteryPlayerRef.child('turnIndex').set(nextTurnIndex);
-            } else {
+
+        try {
+            const txnResult = await lotPickedRef.transaction(currentValue => {
+                if (currentValue === true) {
+                    return;
+                }
+                return true;
+            });
+
+            if (!txnResult || !txnResult.committed) {
                 alert("他のチームに先に選択されました。別のくじを選んでください。");
+                return;
             }
-        });
+
+            await pickRef.set(lotId);
+            const turnIndexSnapshot = await lotteryPlayerRef.child('turnIndex').once('value');
+            const nextTurnIndex = (turnIndexSnapshot.val() || 0) + 1;
+            await lotteryPlayerRef.child('turnIndex').set(nextTurnIndex);
+        } catch (err) {
+            console.error('drawLot error', err);
+            alert("くじ選択でエラーが発生しました。再度お試しください。");
+        }
     }
 
     acquiredPlayersRef.on('value', (snapshot) => {
