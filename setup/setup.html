@@ -63,12 +63,10 @@
 				teams,
 				candidates: candLines
 			};
-			// 初期ウェイバー順を teams の id 配列で追加
-			config.waiverOrder = teams.map(t => t.id);
 
 			try {
 				await db.ref('draftConfig').set(config);
-				// 初期化: acquiredPlayers, lotteries, teamsPassed, selectionConfirmed をリセット（安全のため上書き）
+				// 初期化: acquiredPlayers, lotteries, teamsPassed, selectionConfirmed をリセット
 				await db.ref('acquiredPlayers').set(null);
 				await db.ref('lotteries').set(null);
 				const tp = {};
@@ -76,7 +74,7 @@
 				teams.forEach(t => { tp[t.id] = false; sc[t.id] = false; });
 				await db.ref('teamsPassed').set(tp);
 				await db.ref('selectionConfirmed').set(sc);
-				$status.textContent = '保存しました。select/admin ページは自動で新設定を反映します。';
+				$status.textContent = '保存しました。select ページは自動で新設定を反映します。';
 			} catch (e) {
 				console.error(e);
 				$status.textContent = '保存に失敗しました。コンソールを確認してください。';

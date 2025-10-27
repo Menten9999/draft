@@ -89,8 +89,6 @@
     <div class="all-teams-status">
         <h3>全チームの獲得選手一覧</h3>
         <ul id="all-selections-list"></ul>
-        <h4>ウェイバー順</h4>
-        <ol id="waiver-order"></ol>
     </div>
 </main>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -105,24 +103,9 @@
     let teams = ['team1', 'team2', 'team3', 'team4'];
     let teamNames = {}; // id->表示名
     let allPlayers = ["仙田", "新井", "上坂", "田中", "鵜飼", "布目", "冨高", "大寺"];
-    // 最新の獲得選手リストを保持（configRef から選択肢更新する際に利用）
-    let acquiredPlayersListGlobal = [];
 
     // draftConfig を監視して設定を反映（admin/setup.html で保存される）
     const configRef = database.ref('draftConfig');
-    const waiverRef = database.ref('draftConfig/waiverOrder');
-    const waiverOrderEl = document.getElementById('waiver-order');
-
-    // waiverOrder 表示更新
-    waiverRef.on('value', (s) => {
-        const arr = s.val() || [];
-        waiverOrderEl.innerHTML = '';
-        arr.forEach(id => {
-            const li = document.createElement('li');
-            li.textContent = (teamNames[id] || id);
-            waiverOrderEl.appendChild(li);
-        });
-    });
     configRef.on('value', (snap) => {
         const cfg = snap.val();
         if (cfg && Array.isArray(cfg.teams)) {
@@ -134,7 +117,6 @@
             allPlayers = cfg.candidates.slice();
         }
         // UI 更新（acquiredPlayers の表示や選択肢）
-        updatePlayerOptions(acquiredPlayersListGlobal);
     });
 
     const roundRef = database.ref('round');
@@ -161,8 +143,9 @@
         for (const player in lotteries) {
             const lotteryData = lotteries[player];
             if (lotteryData.competingTeams && lotteryData.competingTeams[teamId]) {
-                // myPick はここで一度だけ定義（ブロックスコープ全体で使用）
-                const myPick = lotteryData.picks ? lotteryData.picks[teamId] : undefined;
+                // myPick をここで一度だけ定義（存在判定は typeof で）
+                const myPick = (lotteryData.picks && Object.prototype.hasOwnProperty.call(lotteryData.picks, teamId))
+                    ? lotteryData.picks[teamId] : undefined;
                 isMyLottery = true;
                 // 開票アニメーションは自チームがそのくじを選択している場合のみ行う
                 if (lotteryData.isRevealing && typeof myPick !== "undefined") {
@@ -185,43 +168,43 @@
                      lotteryOverlay.style.display = 'none';
                      return;
                  }
-                
-                 document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
-                 
-                 const turnIndex = lotteryData.turnIndex || 0;
-                 const turnInfo = document.getElementById('lottery-turn-info');
-                 
-                 if (turnIndex >= lotteryData.pickOrder.length) {
-                     turnInfo.textContent = '全員の選択が完了しました。開票をお待ちください。';
-                 } else {
-                     const currentTurnTeamId = lotteryData.pickOrder[turnIndex];
-                     const currentTurnTeamName = teamNames[currentTurnTeamId] || `チーム${teams.indexOf(currentTurnTeamId) + 1}`;
-                     turnInfo.textContent = `次は ${currentTurnTeamName} の番です。`;
-                 }
 
-                 const myTurn = lotteryData.pickOrder[turnIndex] === teamId;
-                 const lotteryBox = document.getElementById('lottery-box');
-                 lotteryBox.innerHTML = '';
-                // myPick は上で定義済みを利用（重複宣言しない）
+                document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
                 
-                 lotteryData.lots.forEach(lot => {
-                     const button = document.createElement('button');
-                     button.className = 'lot-button';
-                     button.textContent = `くじ ${lot.id + 1}`;
-                     button.onclick = () => drawLot(player, lot.id);
-                     if (!myTurn || lot.isPicked || typeof myPick !== "undefined") {
-                         button.disabled = true;
-                     }
-                     lotteryBox.appendChild(button);
-                 });
-                 lotteryOverlay.style.display = 'flex';
-                 break;
-             }
-         }
-         if (!isMyLottery) {
-             lotteryOverlay.style.display = 'none';
-         }
-     });
+                const turnIndex = lotteryData.turnIndex || 0;
+                const turnInfo = document.getElementById('lottery-turn-info');
+                
+                if (turnIndex >= (lotteryData.pickOrder || []).length) {
+                    turnInfo.textContent = '全員の選択が完了しました。開票をお待ちください。';
+                } else {
+                    const currentTurnTeamId = (lotteryData.pickOrder || [])[turnIndex];
+                    const currentTurnTeamName = teamNames[currentTurnTeamId] || `チーム${teams.indexOf(currentTurnTeamId) + 1}`;
+                    turnInfo.textContent = `次は ${currentTurnTeamName} の番です。`;
+                }
+
+                const myTurn = (lotteryData.pickOrder || [])[turnIndex] === teamId;
+                const lotteryBox = document.getElementById('lottery-box');
+                lotteryBox.innerHTML = '';
+                // myPick は上で定義したものを利用（再宣言しない）
+                lotteryData.lots.forEach(lot => {
+                    const button = document.createElement('button');
+                    button.className = 'lot-button';
+                    button.textContent = `くじ ${lot.id + 1}`;
+                    button.onclick = () => drawLot(player, lot.id);
+                    // 未定義かどうかは typeof で判定（0 や null を誤判定しない）
+                    if (!myTurn || lot.isPicked || typeof myPick !== "undefined") {
+                        button.disabled = true;
+                    }
+                    lotteryBox.appendChild(button);
+                });
+                lotteryOverlay.style.display = 'flex';
+                break;
+            }
+        }
+        if (!isMyLottery) {
+            lotteryOverlay.style.display = 'none';
+        }
+    });
     
     statusRef.on('value', (snapshot) => {
         const message = snapshot.val();
@@ -230,16 +213,6 @@
         const resultImage = document.getElementById('result-image');
         if (message === "交渉権獲得") {
             resultImage.src = 'atari.png';
-            // ウェイバー順を自チームを末尾に移動して更新（原子）
-            waiverRef.transaction(current => {
-                if (!Array.isArray(current)) return current;
-                const idx = current.indexOf(teamId);
-                if (idx !== -1) {
-                    current.splice(idx, 1);
-                    current.push(teamId);
-                }
-                return current;
-            }).catch(()=>{});
         } else if (message.includes("落選")) {
             resultImage.src = 'hazure.png';
         }
@@ -312,7 +285,7 @@
         listElement.innerHTML = '';
         teams.forEach((team, index) => {
             const teamName = teamNames[team] || `チーム${index + 1}`;
-            const playersData = allAcquiredData[team];
+             const playersData = allAcquiredData[team];
             let playersText = 'なし';
             if (playersData) {
                 const teamPlayers = Object.values(playersData);
@@ -323,9 +296,7 @@
             li.textContent = `${teamName}: ${playersText}`;
             listElement.appendChild(li);
         });
-        // グローバルに保持しておく（configRef からの更新時に使用）
-        acquiredPlayersListGlobal = acquiredPlayersList;
-        updatePlayerOptions(acquiredPlayersListGlobal);
+        updatePlayerOptions(acquiredPlayersList);
     });
 
     function updatePlayerOptions(acquiredPlayersList) {

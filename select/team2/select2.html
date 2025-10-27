@@ -89,8 +89,6 @@
     <div class="all-teams-status">
         <h3>全チームの獲得選手一覧</h3>
         <ul id="all-selections-list"></ul>
-        <h4>ウェイバー順</h4>
-        <ol id="waiver-order"></ol>
     </div>
 </main>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
@@ -103,20 +101,7 @@
     let teams = ['team1', 'team2', 'team3', 'team4'];
     let teamNames = {};
     let allPlayers = ["仙田", "新井", "上坂", "田中", "鵜飼", "布目", "冨高", "大寺"];
-    let acquiredPlayersListGlobal = [];
-
     const configRef = database.ref('draftConfig');
-    const waiverRef = database.ref('draftConfig/waiverOrder');
-    const waiverOrderEl = document.getElementById('waiver-order');
-    waiverRef.on('value', s => {
-        const arr = s.val() || [];
-        waiverOrderEl.innerHTML = '';
-        arr.forEach(id => {
-            const li = document.createElement('li');
-            li.textContent = (teamNames[id] || id);
-            waiverOrderEl.appendChild(li);
-        });
-    });
     configRef.on('value', (snap) => {
         const cfg = snap.val();
         if (cfg && Array.isArray(cfg.teams)) {
@@ -150,8 +135,8 @@
         for (const player in lotteries) {
             const lotteryData = lotteries[player];
             if (lotteryData.competingTeams && lotteryData.competingTeams[teamId]) {
-                // myPick を先に定義しておく
-                const myPick = lotteryData.picks ? lotteryData.picks[teamId] : undefined;
+                const myPick = (lotteryData.picks && Object.prototype.hasOwnProperty.call(lotteryData.picks, teamId))
+                    ? lotteryData.picks[teamId] : undefined;
                 isMyLottery = true;
                 // 開票アニメーションは自チームがそのくじを選択している場合のみ行う
                 if (lotteryData.isRevealing && typeof myPick !== "undefined") {
@@ -165,7 +150,7 @@
                         } else {
                             resultImage.src = '';
                         }
- 
+
                         resultOverlay.style.display = 'flex';
                         const envelope = resultOverlay.querySelector('.envelope');
                         envelope.classList.remove('opened');
@@ -191,7 +176,7 @@
                 const myTurn = lotteryData.pickOrder[turnIndex] === teamId;
                 const lotteryBox = document.getElementById('lottery-box');
                 lotteryBox.innerHTML = '';
-                // myPick は上で定義済みを利用
+                // myPick は上で定義済みを使用
  
                 lotteryData.lots.forEach(lot => {
                     const button = document.createElement('button');
@@ -219,15 +204,6 @@
         const resultImage = document.getElementById('result-image');
         if (message === "交渉権獲得") {
             resultImage.src = 'atari.png';
-            waiverRef.transaction(current => {
-                if (!Array.isArray(current)) return current;
-                const idx = current.indexOf(teamId);
-                if (idx !== -1) {
-                    current.splice(idx, 1);
-                    current.push(teamId);
-                }
-                return current;
-            }).catch(()=>{});
         } else if (message.includes("落選")) {
             resultImage.src = 'hazure.png';
         }
@@ -316,8 +292,7 @@
             li.textContent = `${teamName}: ${playersText}`;
             listElement.appendChild(li);
         });
-        acquiredPlayersListGlobal = acquiredPlayersList;
-        updatePlayerOptions(acquiredPlayersListGlobal);
+        updatePlayerOptions(acquiredPlayersList);
     });
 
     function updatePlayerOptions(acquiredPlayersList) {
