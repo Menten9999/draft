@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+	<meta charset="utf-8">
+	<meta name="robots" content="noindex">
+	<title>ドラフト初期設定</title>
+	<style>
+		body{font-family: sans-serif; padding: 20px; max-width:800px}
+		label{display:block; margin-top:12px}
+		input[type="text"], textarea{width:100%; box-sizing:border-box; padding:8px}
+		.row{display:flex; gap:8px; align-items:center}
+		button{margin-top:12px; padding:8px 16px}
+		.small{font-size:0.9em;color:#666;margin-top:6px}
+	</style>
+</head>
+<body>
+	<h1>ドラフト初期設定（管理者）</h1>
+	<form id="setup-form">
+		<label>チーム数
+			<input type="number" id="team-count" min="1" max="20" value="4">
+		</label>
+		<label>チーム名（改行で複数行、順番に team1, team2... に割当）
+			<textarea id="team-names" rows="4" placeholder="チームA&#10;チームB&#10;チームC&#10;チームD"></textarea>
+		</label>
+		<label>候補選手（改行で1選手ずつ）
+			<textarea id="candidates" rows="6" placeholder="仙田&#10;新井&#10;上坂"></textarea>
+		</label>
+		<div class="row">
+			<button type="button" id="save-btn">保存して初期化</button>
+			<button type="button" id="clear-btn">draftConfig を削除</button>
+		</div>
+		<p id="status"></p>
+		<p class="small">注意: firebase-config.js への相対パスは環境に合わせて調整してください。</p>
+	</form>
+
+	<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+	<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+	<script src="../firebase-config.js"></script>
+	<script>
+		firebase.initializeApp(firebaseConfig);
+		const db = firebase.database();
+
+		const $count = document.getElementById('team-count');
+		const $names = document.getElementById('team-names');
+		const $cands = document.getElementById('candidates');
+		const $save = document.getElementById('save-btn');
+		const $clear = document.getElementById('clear-btn');
+		const $status = document.getElementById('status');
+
+		$save.addEventListener('click', async () => {
+			const count = Math.max(1, Math.min(20, parseInt($count.value || '4', 10)));
+			const nameLines = $names.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+			const candLines = $cands.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+
+			const teams = [];
+			for (let i=0;i<count;i++){
+				const id = 'team' + (i+1);
+				const name = nameLines[i] || `チーム${i+1}`;
+				teams.push({ id, name });
+			}
+
+			const config = {
+				teams,
+				candidates: candLines
+			};
+			// 初期ウェイバー順を teams の id 配列で追加
+			config.waiverOrder = teams.map(t => t.id);
+
+			try {
+				await db.ref('draftConfig').set(config);
+				// 初期化: acquiredPlayers, lotteries, teamsPassed, selectionConfirmed をリセット（安全のため上書き）
+				await db.ref('acquiredPlayers').set(null);
+				await db.ref('lotteries').set(null);
+				const tp = {};
+				const sc = {};
+				teams.forEach(t => { tp[t.id] = false; sc[t.id] = false; });
+				await db.ref('teamsPassed').set(tp);
+				await db.ref('selectionConfirmed').set(sc);
+				$status.textContent = '保存しました。select/admin ページは自動で新設定を反映します。';
+			} catch (e) {
+				console.error(e);
+				$status.textContent = '保存に失敗しました。コンソールを確認してください。';
+			}
+		});
+
+		$clear.addEventListener('click', async () => {
+			if (!confirm('draftConfig を削除しますか？関連データも削除されます。')) return;
+			try {
+				await db.ref('draftConfig').remove();
+				await db.ref('acquiredPlayers').remove();
+				await db.ref('lotteries').remove();
+				await db.ref('teamsPassed').remove();
+				await db.ref('selectionConfirmed').remove();
+				$status.textContent = 'draftConfig を削除しました。';
+			} catch (e) {
+				console.error(e);
+				$status.textContent = '削除に失敗しました。';
+			}
+		});
+	</script>
+</body>
+</html>
