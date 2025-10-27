@@ -28,20 +28,29 @@
             position: relative; width: 300px; height: 200px;
             background-color: #f0e68c; border-radius: 5px; cursor: pointer;
             box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            /* improved 3D handling */
+            transform-style: preserve-3d;
+            overflow: hidden;
         }
         .envelope-flap {
             position: absolute; top: 0; left: 0; width: 100%; height: 50%;
-            background-color: #f0e68c; transform-origin: top;
-            transition: transform 0.5s; clip-path: polygon(0 0, 100% 0, 50% 100%);
+            background-color: #f0e68c; transform-origin: top center;
+            transition: transform 0.6s cubic-bezier(.2,.8,.2,1);
+            clip-path: polygon(0 0, 100% 0, 50% 100%);
+            backface-visibility: hidden;
         }
         .envelope.opened .envelope-flap { transform: rotateX(-180deg); }
         .result-image-container {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             display: flex; justify-content: center; align-items: center;
+            /* ensure children animate in 3D context */
+            transform-style: preserve-3d;
+            pointer-events: none;
         }
         #result-image {
-            width: 80%; transform: translateY(100%);
-            transition: transform 0.5s 0.2s;
+            width: 80%; transform: translateY(120%);
+            transition: transform 0.6s cubic-bezier(.2,.8,.2,1) 0.15s;
+            backface-visibility: hidden;
         }
         .envelope.opened #result-image { transform: translateY(0); }
         #lottery-turn-info { font-size: 1.5em; margin-bottom: 20px; }
@@ -118,12 +127,23 @@
             if (lotteryData.competingTeams[teamId]) {
                 isMyLottery = true;
                 if (lotteryData.isRevealing) {
+                    // show result overlay and ensure the correct image is set BEFORE opening
                     resultOverlay.style.display = 'flex';
                     const envelope = resultOverlay.querySelector('.envelope');
-                    if (!envelope.classList.contains('opened')) {
-                         document.getElementById('result-image').src = '';
-                    }
+                    // ensure closed state visually
                     envelope.classList.remove('opened');
+                    // set result image based on current team status (ensure immediate visibility)
+                    statusRef.once('value').then(snapshot => {
+                        const message = snapshot.val();
+                        const resultImage = document.getElementById('result-image');
+                        if (message === "交渉権獲得") {
+                            resultImage.src = 'atari.png';
+                        } else if (message && message.includes("落選")) {
+                            resultImage.src = 'hazure.png';
+                        } else {
+                            // fallback: keep previous or empty
+                        }
+                    });
                     lotteryOverlay.style.display = 'none';
                     return; 
                 }
@@ -179,12 +199,41 @@
 
     function openEnvelope() {
         const envelope = document.querySelector('.envelope');
-        if (envelope.classList.contains('opened')) return;
-        envelope.classList.add('opened');
-        setTimeout(() => {
-            document.getElementById('result-overlay').style.display = 'none';
-            statusRef.remove();
-        }, 20000);
+        if (!envelope || envelope.classList.contains('opened')) return;
+
+        // disable clicks while animating
+        envelope.style.pointerEvents = 'none';
+
+        // ensure the image is already set from statusRef; then animate
+        statusRef.once('value').then(snapshot => {
+            const message = snapshot.val();
+            const resultImage = document.getElementById('result-image');
+            if (message === "交渉権獲得") {
+                resultImage.src = 'atari.png';
+            } else if (message && message.includes("落選")) {
+                resultImage.src = 'hazure.png';
+            }
+
+            // force reflow to ensure CSS transition will run
+            void envelope.offsetWidth;
+            envelope.classList.add('opened');
+
+            // wait until the image transition completes, then hide overlay shortly after
+            const onTransitionEnd = (e) => {
+                if (e.target && e.target.id === 'result-image') {
+                    // give user a short time to view result, then close
+                    setTimeout(() => {
+                        document.getElementById('result-overlay').style.display = 'none';
+                        // remove the status node so UI can reset for next reveal
+                        statusRef.remove().catch(()=>{});
+                        envelope.classList.remove('opened');
+                        envelope.style.pointerEvents = '';
+                    }, 1400);
+                    envelope.removeEventListener('transitionend', onTransitionEnd, true);
+                }
+            };
+            envelope.addEventListener('transitionend', onTransitionEnd, true);
+        });
     }
 
     async function drawLot(player, lotId) {
