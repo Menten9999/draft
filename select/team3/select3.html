@@ -124,9 +124,12 @@
 
         for (const player in lotteries) {
             const lotteryData = lotteries[player];
-            if (lotteryData.competingTeams[teamId]) {
+            if (lotteryData.competingTeams && lotteryData.competingTeams[teamId]) {
+                // 自チームがその選手のくじに参加しているか（myPick が存在するか）を判定
+                const myPick = lotteryData.picks ? lotteryData.picks[teamId] : undefined;
                 isMyLottery = true;
-                if (lotteryData.isRevealing) {
+                // 開票アニメーションは自チームがそのくじを選択している場合のみ行う
+                if (lotteryData.isRevealing && myPick !== undefined) {
                     const resultImage = document.getElementById('result-image');
                     statusRef.once('value').then(snap => {
                         const message = snap.val();
@@ -163,8 +166,6 @@
                 const myTurn = lotteryData.pickOrder[turnIndex] === teamId;
                 const lotteryBox = document.getElementById('lottery-box');
                 lotteryBox.innerHTML = '';
-                const myPick = lotteryData.picks ? lotteryData.picks[teamId] : undefined;
-                
                 lotteryData.lots.forEach(lot => {
                     const button = document.createElement('button');
                     button.className = 'lot-button';

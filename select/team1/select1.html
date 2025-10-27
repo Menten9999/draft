@@ -124,28 +124,29 @@
 
         for (const player in lotteries) {
             const lotteryData = lotteries[player];
-            if (lotteryData.competingTeams[teamId]) {
+            if (lotteryData.competingTeams && lotteryData.competingTeams[teamId]) {
+                const myPick = lotteryData.picks ? lotteryData.picks[teamId] : undefined;
                 isMyLottery = true;
-                if (lotteryData.isRevealing) {
-                    const resultImage = document.getElementById('result-image');
-                    statusRef.once('value').then(snap => {
-                        const message = snap.val();
-                        if (message === "交渉権獲得") {
-                            resultImage.src = 'atari.png';
-                        } else if (message && message.includes("落選")) {
-                            resultImage.src = 'hazure.png';
-                        } else {
-                            resultImage.src = '';
-                        }
+                if (lotteryData.isRevealing && myPick !== undefined) {
+                     const resultImage = document.getElementById('result-image');
+                     statusRef.once('value').then(snap => {
+                         const message = snap.val();
+                         if (message === "交渉権獲得") {
+                             resultImage.src = 'atari.png';
+                         } else if (message && message.includes("落選")) {
+                             resultImage.src = 'hazure.png';
+                         } else {
+                             resultImage.src = '';
+                         }
 
-                        resultOverlay.style.display = 'flex';
-                        const envelope = resultOverlay.querySelector('.envelope');
-                        envelope.classList.remove('opened');
-                        setTimeout(() => openEnvelope(), 200);
-                    });
-                    lotteryOverlay.style.display = 'none';
-                    return;
-                }
+                         resultOverlay.style.display = 'flex';
+                         const envelope = resultOverlay.querySelector('.envelope');
+                         envelope.classList.remove('opened');
+                         setTimeout(() => openEnvelope(), 200);
+                     });
+                     lotteryOverlay.style.display = 'none';
+                     return;
+                 }
 
                 document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
                 

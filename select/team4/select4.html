@@ -124,9 +124,10 @@
 
         for (const player in lotteries) {
             const lotteryData = lotteries[player];
-            if (lotteryData.competingTeams[teamId]) {
+            if (lotteryData.competingTeams && lotteryData.competingTeams[teamId]) {
+                const myPick = lotteryData.picks ? lotteryData.picks[teamId] : undefined;
                 isMyLottery = true;
-                if (lotteryData.isRevealing) {
+                if (lotteryData.isRevealing && myPick !== undefined) {
                     const resultImage = document.getElementById('result-image');
                     statusRef.once('value').then(snap => {
                         const message = snap.val();
