@@ -82,7 +82,7 @@
             <option value="">--選手を選択してください--</option>
         </select>
     </form>
-    <input type="button" value="確定" onclick="submitSelection()"/>
+    <input id="confirm-btn" type="button" value="確定" onclick="submitSelection()"/>
     <input type="button" value="選択を辞退" onclick="passSelection()" class="pass-button"/>
     <div class="selected">選択選手： <span id="BtnTest"></span></div>
     <div id="status-message"></div>
@@ -186,7 +186,11 @@
                      return;
                  }
 
-                document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
+                // player はキーとして encodeURIComponent されている可能性があるため表示用にデコードする
+                let displayPlayer = player;
+                try { displayPlayer = decodeURIComponent(player); } catch (e) { /* keep original if decode fails */ }
+
+                document.getElementById('lottery-player-name').textContent = `「${displayPlayer}」選手の抽選`;
                 
                 const turnIndex = lotteryData.turnIndex || 0;
                 const turnInfo = document.getElementById('lottery-turn-info');
@@ -347,10 +351,33 @@
         document.getElementById('round-title').textContent = `第${round}巡選択希望選手選択画面`;
     });
 
+    // 選択が存在する間は同巡内で変更不可（くじで「落選」になった場合のみ再選択を許可）
     selectionRef.on('value', (snapshot) => {
         const selectedPlayer = snapshot.val();
         document.getElementById("BtnTest").textContent = selectedPlayer || "未選択";
         document.jstest.pets.value = selectedPlayer || "";
+
+        const selectEl = document.getElementById('pet-select');
+        const confirmBtn = document.getElementById('confirm-btn');
+        // 選択が存在し、かつステータスが「落選」を含まないならロック
+        if (selectedPlayer) {
+            statusRef.once('value').then(snap => {
+                const msg = (snap.val() || '').toString();
+                const isLoser = msg && msg.includes('落選');
+                selectEl.disabled = !isLoser; // 落選なら選べる（再選択）、それ以外はロック
+                confirmBtn.disabled = !isLoser;
+                if (!isLoser) {
+                    document.getElementById('status-message').textContent = '※ 選択済みのため、この巡では変更できません。';
+                } else {
+                    document.getElementById('status-message').textContent = '';
+                }
+            }).catch(()=>{ /* noop */ });
+        } else {
+            // 未選択なら通常状態
+            selectEl.disabled = false;
+            confirmBtn.disabled = false;
+            document.getElementById('status-message').textContent = '';
+        }
     });
     
     systemAlertRef.on('value', (snapshot) => {

@@ -82,7 +82,7 @@
             <option value="">--選手を選択してください--</option>
         </select>
     </form>
-    <input type="button" value="確定" onclick="submitSelection()"/>
+    <input id="confirm-btn" type="button" value="確定" onclick="submitSelection()"/>
     <input type="button" value="選択を辞退" onclick="passSelection()" class="pass-button"/>
     <div class="selected">選択選手： <span id="BtnTest"></span></div>
     <div id="status-message"></div>
@@ -188,6 +188,9 @@
                 }
                 
                 document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
+                let displayPlayer = player;
+                try { displayPlayer = decodeURIComponent(player); } catch (e) { }
+                document.getElementById('lottery-player-name').textContent = `「${displayPlayer}」選手の抽選`;
                 
                 const turnIndex = lotteryData.turnIndex || 0;
                 const turnInfo = document.getElementById('lottery-turn-info');
@@ -356,6 +359,22 @@
         const selectedPlayer = snapshot.val();
         document.getElementById("BtnTest").textContent = selectedPlayer || "未選択";
         document.jstest.pets.value = selectedPlayer || "";
+
+        const selectEl = document.getElementById('pet-select');
+        const confirmBtn = document.getElementById('confirm-btn');
+        if (selectedPlayer) {
+            statusRef.once('value').then(snap => {
+                const msg = (snap.val() || '').toString();
+                const isLoser = msg && msg.includes('落選');
+                selectEl.disabled = !isLoser;
+                confirmBtn.disabled = !isLoser;
+                document.getElementById('status-message').textContent = isLoser ? '' : '※ 選択済みのため、この巡では変更できません。';
+            }).catch(()=>{});
+        } else {
+            selectEl.disabled = false;
+            confirmBtn.disabled = false;
+            document.getElementById('status-message').textContent = '';
+        }
     });
     
     systemAlertRef.on('value', (snapshot) => {
