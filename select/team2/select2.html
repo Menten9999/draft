@@ -51,6 +51,9 @@
             width: 80%; transform: translateY(120%);
             transition: transform 0.6s cubic-bezier(.2,.8,.2,1) 0.15s;
             backface-visibility: hidden;
+            /* 描画パフォーマンス向上のヒント（封筒内の画像アニメを安定化） */
+            will-change: transform;
+            transform-style: preserve-3d;
         }
         .envelope.opened #result-image { transform: translateY(0); }
         #lottery-turn-info { font-size: 1.5em; margin-bottom: 20px; }
@@ -188,8 +191,9 @@
                 }
                 
                 document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
+                // player は encodeURIComponent されている可能性があるため表示用にデコード
                 let displayPlayer = player;
-                try { displayPlayer = decodeURIComponent(player); } catch (e) { }
+                try { displayPlayer = decodeURIComponent(player); } catch (e) { /* noop */ }
                 document.getElementById('lottery-player-name').textContent = `「${displayPlayer}」選手の抽選`;
                 
                 const turnIndex = lotteryData.turnIndex || 0;
@@ -355,6 +359,7 @@
         document.getElementById('round-title').textContent = `第${round}巡選択希望選手選択画面`;
     });
 
+    // 選択が存在する間は同巡内で変更不可（くじで「落選」になった場合のみ再選択を許可）
     selectionRef.on('value', (snapshot) => {
         const selectedPlayer = snapshot.val();
         document.getElementById("BtnTest").textContent = selectedPlayer || "未選択";

@@ -94,6 +94,7 @@
 	let teams = [];            // team ids order
 	let teamNames = {};        // id -> display name
 	let waiverOrder = [];      // array of team ids (if provided)
+	let waiverEnabled = false; // draftConfig のフラグを反映
 	let currentSelectionsMap = {}; // latest currentSelections snapshot
 
 	// load config (teams, candidates, waiverOrder)
@@ -103,6 +104,8 @@
 		teamNames = {};
 		(cfg.teams || []).forEach((t,i)=> teamNames[t.id] = t.name || `チーム${i+1}`);
 		waiverOrder = Array.isArray(cfg.waiverOrder) ? cfg.waiverOrder.slice() : teams.slice();
+		// ウェイバー方式の有効/無効を反映
+		waiverEnabled = !!cfg.waiverEnabled;
 		renderCurrentSelections(); // refresh display when team list changes
 		renderAcquiredPlayers(); 
 	});
@@ -231,12 +234,15 @@
 				const key = encodeKey(player);
 				const exist = await lotteriesRef.child(key).once('value');
 				if (exist.exists()) continue;
-				// pick order via waiverOrder filtered or random
-				let pickOrder = waiverOrder.filter(t=>pickingTeams.includes(t));
-				if (!pickOrder.length) {
+				// pickOrder はウェイバー方式が有効な場合のみ waiverOrder を利用、そうでなければランダム
+				let pickOrder = [];
+				if (waiverEnabled && Array.isArray(waiverOrder) && waiverOrder.length) {
+					pickOrder = waiverOrder.filter(t => pickingTeams.includes(t));
+				}
+				if (!pickOrder || pickOrder.length === 0) {
 					pickOrder = pickingTeams.slice();
-					for (let i=pickOrder.length-1;i>0;i--){
-						const j = Math.floor(Math.random()*(i+1));
+					for (let i = pickOrder.length - 1; i > 0; i--) {
+						const j = Math.floor(Math.random() * (i + 1));
 						[pickOrder[i], pickOrder[j]] = [pickOrder[j], pickOrder[i]];
 					}
 				}
