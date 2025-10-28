@@ -95,7 +95,15 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 <script src="../../firebase-config.js"></script>
 <script>
-    firebase.initializeApp(firebaseConfig);
+    // firebaseConfig の存在をチェックして安全に初期化
+    if (typeof firebaseConfig === 'undefined') {
+        console.error('firebaseConfig is not defined (team1). Check draft\\firebase-config.js');
+        document.getElementById('status-message').textContent = 'エラー: Firebase 設定がありません。管理者に確認してください。';
+        // Disable controls to avoid further errors
+        document.querySelectorAll('input, select, button').forEach(el => el.disabled = true);
+    } else {
+        if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    }
     const database = firebase.database();
     const teamId = 'team1';
     // 全ページで使う獲得選手リストのグローバル保持

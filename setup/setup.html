@@ -42,7 +42,19 @@
 	<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 	<script src="../firebase-config.js"></script>
 	<script>
-		firebase.initializeApp(firebaseConfig);
+		// Firebase の設定が読み込まれているか確認して初期化（多重初期化を避ける）
+		if (typeof firebaseConfig === 'undefined') {
+			console.error('firebaseConfig is not defined. Please set draft\\firebase-config.js correctly.');
+			document.getElementById('status').textContent = 'エラー: firebase-config.js が読み込まれていません。管理者に確認してください。';
+			// disable buttons
+			document.getElementById('save-btn').disabled = true;
+			document.getElementById('finish-btn').disabled = true;
+			document.getElementById('clear-btn').disabled = true;
+		} else {
+			if (!firebase.apps || !firebase.apps.length) {
+				firebase.initializeApp(firebaseConfig);
+			}
+		}
 		const db = firebase.database();
 
 		const $count = document.getElementById('team-count');
