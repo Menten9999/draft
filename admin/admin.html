@@ -5,16 +5,25 @@
 <meta name="robots" content="noindex">
 <title>管理者画面</title>
 <style>
+	.box{max-width:1000px;margin:24px auto;padding:18px;border:1px solid #eee;border-radius:8px}
+	.row{display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap}
 	.card{display:inline-block;padding:12px 16px;background:#17a2b8;color:#fff;border-radius:6px;text-decoration:none;font-weight:600}
 	.card.back{background:#6c757d}
 	.disabled{pointer-events:none;opacity:0.5}
 	.notice{margin-top:12px;color:#d90429;font-weight:600}
+	.team-box{border:1px solid #ddd;padding:10px;border-radius:6px;margin-top:12px}
+	.team-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+	label.small{font-size:0.9em;color:#333}
+	input[type="text"]{padding:6px}
+	select{padding:6px}
+	button.small{padding:6px 10px}
+	.section{margin-top:18px;padding-top:12px;border-top:1px dashed #ddd}
 </style>
 </head>
 <body>
 	<main class="box">
-		<h1>管理者画面</h1>
-		<p>管理者用のダッシュボードです。ここからセットアップ画面へ進めます。</p>
+		<h1>管理者画面（ドラフト進行）</h1>
+		<p>ここから選択／くじの操作ができます。</p>
 
 		<div class="row">
 			<a id="setup-link" class="card" href="../setup/setup.html">セットアップ画面を開く</a>
@@ -23,41 +32,302 @@
 
 		<div id="admin-notice" class="notice" style="display:none;"></div>
 
-		<hr style="margin:18px 0;border:none;border-top:1px solid #eee">
+		<!-- 運営用コントロール -->
+		<div class="section" id="controls">
+			<h2>現在のラウンド: <span id="round-value">-</span></h2>
+			<button id="inc-round" class="small">ラウンド進める</button>
+			<button id="dec-round" class="small">ラウンド戻す</button>
 
-		<p class="note">※ 本画面は簡易な管理画面です。必要に応じてログ管理や権限管理を追加してください。</p>
+			<div id="teams-container" class="section">
+				<h3>チーム選択操作</h3>
+				<div id="teams-list">読み込み中...</div>
+			</div>
+
+			<div id="lottery-creator" class="section">
+				<h3>くじ作成（管理者操作）</h3>
+				<label>選手名: <input id="lot-player" type="text"></label>
+				<div id="lot-competitors" style="margin-top:8px">チームを選択してください...</div>
+				<button id="start-lottery" class="small">くじを作成して開始</button>
+			</div>
+
+			<div id="lotteries" class="section">
+				<h3>進行中のくじ</h3>
+				<div id="lottery-list">読み込み中...</div>
+			</div>
+		</div>
+
+		<hr style="margin:18px 0;border:none;border-top:1px solid #eee">
+		<p class="note">※ 管理者による強制操作は慎重に行ってください。</p>
 	</main>
 
 <!-- Firebase 設定ファイルの読み込み -->
 <script src="../firebase-config.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 <script>
-	(function(){
-		const noticeEl = document.getElementById('admin-notice');
-		const setupLink = document.getElementById('setup-link');
-		const homeLink = document.getElementById('home-link');
+(async function(){
+	const noticeEl = document.getElementById('admin-notice');
+	const setupLink = document.getElementById('setup-link');
+	const homeLink = document.getElementById('home-link');
 
-		if (typeof firebaseConfig === 'undefined') {
-			console.error('firebaseConfig is not defined. admin links disabled.');
-			noticeEl.textContent = 'エラー: Firebase 設定が読み込まれていません。設定ファイル (firebase-config.js) を配置してください。';
-			noticeEl.style.display = 'block';
-			setupLink.classList.add('disabled');
-			homeLink.classList.add('disabled');
-			// 追加オプション: クリック防止のため href を無効化
-			setupLink.setAttribute('href', '#');
-			homeLink.setAttribute('href', '#');
-			return;
+	if (typeof firebaseConfig === 'undefined') {
+		console.error('firebaseConfig is not defined. admin links disabled.');
+		noticeEl.textContent = 'エラー: Firebase 設定が読み込まれていません。設定ファイル (firebase-config.js) を配置してください。';
+		noticeEl.style.display = 'block';
+		setupLink.classList.add('disabled');
+		homeLink.classList.add('disabled');
+		setupLink.setAttribute('href', '#');
+		homeLink.setAttribute('href', '#');
+		return;
+	}
+	if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+	const db = firebase.database();
+
+	// refs
+	const configRef = db.ref('draftConfig');
+	const roundRef = db.ref('round');
+	const currentSelectionsRef = db.ref('currentSelections');
+	const acquiredRef = db.ref('acquiredPlayers');
+	const lotteriesRef = db.ref('lotteries');
+	const teamsPassedRef = db.ref('teamsPassed');
+	const selectionConfirmedRef = db.ref('selectionConfirmed');
+	const teamStatusRef = id => db.ref('teamStatus/' + id);
+
+	// ui elements
+	const roundEl = document.getElementById('round-value');
+	const teamsListEl = document.getElementById('teams-list');
+	const lotPlayerInput = document.getElementById('lot-player');
+	const lotCompetitorsEl = document.getElementById('lot-competitors');
+	const startLotteryBtn = document.getElementById('start-lottery');
+	const lotteryListEl = document.getElementById('lottery-list');
+
+	let teams = [];
+	let teamNames = {};
+	let waiverOrder = [];
+
+	// load draftConfig and render teams UI
+	configRef.on('value', snap => {
+		const cfg = snap.val() || {};
+		teams = Array.isArray(cfg.teams) ? cfg.teams.map(t=>t.id) : [];
+		teamNames = {};
+		( cfg.teams || []).forEach((t,i)=> teamNames[t.id]=t.name||`チーム${i+1}`);
+		waiverOrder = cfg.waiverOrder || teams.slice();
+		renderTeamsControls();
+		renderCompetitorCheckboxes();
+	});
+
+	// --- 追加: currentSelections を監視して自動でくじを作成（同一選手を複数チームが選択した場合） ---
+	currentSelectionsRef.on('value', async snap => {
+		const sel = snap.val() || {};
+		// player -> [teamId,...]
+		const map = {};
+		for (const teamId of Object.keys(sel)) {
+			const player = sel[teamId];
+			if (!player) continue;
+			if (!map[player]) map[player] = [];
+			map[player].push(teamId);
 		}
 
-		// firebaseConfig がある場合は安全に初期化（多重初期化回避）
-		if (!window.firebase) {
-			console.warn('Firebase SDK not loaded. If you need realtime features, include Firebase SDK.');
-			// SDK がないなら処理を止めずリンクは有効のままにしておく
-			return;
+		for (const player of Object.keys(map)) {
+			const teamsPicking = map[player];
+			if (teamsPicking.length < 2) continue; // 競合がなければスキップ
+
+			// 既にくじがあるか確認
+			const existSnap = await lotteriesRef.child(player).once('value');
+			if (existSnap.exists()) continue; // 既存のくじを壊さない
+
+			// pickOrder: ウェイバー有効なら waiverOrder の順でフィルタ、無効ならランダム
+			let pickOrder = [];
+			if (Array.isArray(waiverOrder) && waiverOrder.length > 0) {
+				pickOrder = waiverOrder.filter(t => teamsPicking.includes(t));
+			}
+			if (!pickOrder || pickOrder.length === 0) {
+				// shuffle teamsPicking
+				pickOrder = teamsPicking.slice();
+				for (let i = pickOrder.length - 1; i > 0; i--) {
+					const j = Math.floor(Math.random() * (i + 1));
+					[pickOrder[i], pickOrder[j]] = [pickOrder[j], pickOrder[i]];
+				}
+			}
+
+			// lots を作成（参加チーム数分）
+			const lots = teamsPicking.map((t, i) => ({ id: i, isPicked: false }));
+
+			const payload = {
+				competingTeams: teamsPicking.reduce((o, t) => { o[t] = true; return o; }, {}),
+				lots,
+				pickOrder,
+				turnIndex: 0,
+				picks: {},
+				isRevealing: false
+			};
+
+			try {
+				await lotteriesRef.child(player).set(payload);
+				console.log('Auto-created lottery for', player, 'teams:', teamsPicking, 'pickOrder:', pickOrder);
+			} catch (e) {
+				console.error('Failed to auto-create lottery for', player, e);
+			}
 		}
-		if (!firebase.apps || !firebase.apps.length) {
-			try { firebase.initializeApp(firebaseConfig); } catch (e) { console.warn('firebase initialize error', e); }
+	});
+	// --- 追加ここまで ---
+
+	// round controls
+	roundRef.on('value', s=> { roundEl.textContent = s.val() || 1; });
+	document.getElementById('inc-round').addEventListener('click', async ()=> {
+		const r = (await roundRef.once('value')).val() || 1;
+		await roundRef.set(r+1);
+	});
+	document.getElementById('dec-round').addEventListener('click', async ()=> {
+		const r = (await roundRef.once('value')).val() || 1;
+		if (r>1) await roundRef.set(r-1);
+	});
+
+	// render team controls
+	function renderTeamsControls(){
+		teamsListEl.innerHTML = '';
+		if (!teams.length) { teamsListEl.textContent = 'チームが設定されていません。'; return; }
+		teams.forEach(id => {
+			const box = document.createElement('div'); box.className='team-box';
+			const row = document.createElement('div'); row.className='team-row';
+			const name = teamNames[id] || id;
+			const input = document.createElement('input'); input.type='text'; input.placeholder='選手名を入力'; input.id = 'sel-'+id;
+			// load current selection
+			currentSelectionsRef.child(id).once('value').then(s=> { if (s.exists()) input.value = s.val(); });
+			const setBtn = document.createElement('button'); setBtn.className='small'; setBtn.textContent='設定';
+			setBtn.addEventListener('click', ()=> currentSelectionsRef.child(id).set(input.value || null));
+			const confirmBtn = document.createElement('button'); confirmBtn.className='small'; confirmBtn.textContent='確定';
+			confirmBtn.addEventListener('click', ()=> selectionConfirmedRef.child(id).set(true));
+			const awardBtn = document.createElement('button'); awardBtn.className='small'; awardBtn.textContent='獲得登録';
+			awardBtn.addEventListener('click', async ()=> {
+				const player = (await currentSelectionsRef.child(id).once('value')).val();
+				if (!player) return alert('先に選択を設定してください。');
+				// register to acquiredPlayers
+				await acquiredRef.child(id).push(player);
+				// clear selection and confirmed
+				await currentSelectionsRef.child(id).remove();
+				await selectionConfirmedRef.child(id).set(false);
+				alert(name + ' に ' + player + ' を登録しました。');
+			});
+			row.appendChild(document.createTextNode(name));
+			row.appendChild(input);
+			row.appendChild(setBtn);
+			row.appendChild(confirmBtn);
+			row.appendChild(awardBtn);
+			box.appendChild(row);
+			teamsListEl.appendChild(box);
+		});
+	}
+
+	// render competitor checkboxes for lottery
+	function renderCompetitorCheckboxes(){
+		lotCompetitorsEl.innerHTML = '';
+		if (!teams.length) return;
+		teams.forEach(id=>{
+			const label = document.createElement('label'); label.style.marginRight='8px';
+			const cb = document.createElement('input'); cb.type='checkbox'; cb.value = id; cb.className='lot-cb';
+			label.appendChild(cb);
+			label.appendChild(document.createTextNode(' ' + (teamNames[id]||id)));
+			lotCompetitorsEl.appendChild(label);
+		});
+	}
+
+	// create lottery
+	startLotteryBtn.addEventListener('click', async ()=>{
+		const player = (lotPlayerInput.value || '').trim();
+		if (!player) return alert('選手名を入力してください。');
+		const checked = Array.from(document.querySelectorAll('.lot-cb')).filter(c=>c.checked).map(c=>c.value);
+		if (checked.length < 2) return alert('競合チームを2つ以上選択してください。');
+		// build lots: number equal to competing teams
+		const lots = checked.map((t,i)=> ({ id:i, isPicked:false }));
+		const pickOrder = waiverOrder && waiverOrder.length ? waiverOrder.slice() : teams.slice();
+		// ensure pickOrder contains competing teams only ordering
+		const filteredOrder = pickOrder.filter(t => checked.includes(t));
+		// if no filtered, fallback to checked as order
+		const finalOrder = filteredOrder.length ? filteredOrder : checked.slice();
+		const payload = {
+			competingTeams: checked.reduce((o,t)=>{ o[t]=true; return o; }, {}),
+			lots,
+			pickOrder: finalOrder,
+			turnIndex: 0,
+			picks: {},
+			isRevealing: false
+		};
+		await lotteriesRef.child(player).set(payload);
+		alert('くじを作成しました: ' + player);
+		lotPlayerInput.value = '';
+		Array.from(document.querySelectorAll('.lot-cb')).forEach(c=>c.checked=false);
+	});
+
+	// watch lotteries and render list
+	lotteriesRef.on('value', snap=>{
+		const data = snap.val() || {};
+		renderLotteryList(data);
+	});
+
+	function renderLotteryList(data){
+		lotteryListEl.innerHTML = '';
+		const keys = Object.keys(data);
+		if (!keys.length) { lotteryListEl.textContent = '進行中のくじはありません'; return; }
+		keys.forEach(player=>{
+			const d = data[player];
+			const box = document.createElement('div'); box.className='team-box';
+			const title = document.createElement('div'); title.textContent = `選手: ${player}`;
+			box.appendChild(title);
+			const teamsIn = Object.keys(d.competingTeams || {});
+			const info = document.createElement('div'); info.textContent = '競合: ' + teamsIn.map(t=>teamNames[t]||t).join(', ');
+			box.appendChild(info);
+			const status = document.createElement('div'); status.textContent = '開票中: ' + (!!d.isRevealing);
+			box.appendChild(status);
+			// control: admin pick winner and reveal
+			const sel = document.createElement('select');
+			teamsIn.forEach(t=>{
+				const opt = document.createElement('option'); opt.value=t; opt.textContent = teamNames[t] || t; sel.appendChild(opt);
+			});
+			const revealBtn = document.createElement('button'); revealBtn.className='small'; revealBtn.textContent='開票して勝者確定';
+			revealBtn.addEventListener('click', ()=> adminRevealLottery(player, sel.value));
+			box.appendChild(sel);
+			box.appendChild(revealBtn);
+			// show lots and picks
+			const lotsDiv = document.createElement('div'); lotsDiv.style.marginTop='8px';
+			(l.d ? (d.lots||[]) : (d.lots||[])).forEach(l=>{
+				const p = document.createElement('span'); p.style.marginRight='6px';
+				p.textContent = `くじ${l.id+1}:${l.isPicked? '×' : '○'}`;
+				lotsDiv.appendChild(p);
+			});
+			box.appendChild(lotsDiv);
+			lotteryListEl.appendChild(box);
+		});
+	}
+
+	// admin reveal: set teamStatus and acquiredPlayers, mark isRevealing
+	async function adminRevealLottery(player, winnerTeamId){
+		if (!confirm(`${teamNames[winnerTeamId]||winnerTeamId} を「${player}」の獲得者として確定しますか？`)) return;
+		const snap = await lotteriesRef.child(player).once('value');
+		const data = snap.val();
+		if (!data) return alert('くじデータが見つかりません');
+		// set acquiredPlayers for winner
+		await acquiredRef.child(winnerTeamId).push(player);
+		// set teamStatus: winner / losers
+		const teamsIn = Object.keys(data.competingTeams || {});
+		for (const t of teamsIn) {
+			if (t === winnerTeamId) {
+				await teamStatusRef(t).set('交渉権獲得');
+			} else {
+				await teamStatusRef(t).set(player + ' に対して落選');
+			}
 		}
-	})();
+		// mark revealing so clients can show envelope animation
+		await lotteriesRef.child(player).child('isRevealing').set(true);
+		// cleanup: remove lottery entry after a short delay (optional)
+		setTimeout(()=> lotteriesRef.child(player).remove().catch(()=>{}), 5000);
+		alert('開票処理を行いました。');
+	}
+
+	// helper: ensure UI initial state
+	renderCompetitorCheckboxes();
+	renderTeamsControls();
+})();
 </script>
 </body>
 </html>
