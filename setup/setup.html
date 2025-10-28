@@ -31,6 +31,7 @@
 		</div>
 		<div class="row">
 			<button type="button" id="save-btn">保存して初期化</button>
+			<button type="button" id="finish-btn">設定を終了</button> <!-- 追加 -->
 			<button type="button" id="clear-btn">draftConfig を削除</button>
 		</div>
 		<p id="status"></p>
@@ -48,10 +49,12 @@
 		const $names = document.getElementById('team-names');
 		const $cands = document.getElementById('candidates');
 		const $save = document.getElementById('save-btn');
+		const $finish = document.getElementById('finish-btn');
 		const $clear = document.getElementById('clear-btn');
 		const $status = document.getElementById('status');
 
-		$save.addEventListener('click', async () => {
+		// 保存処理を関数化。redirect=true なら保存後に管理画面へ遷移する
+		async function saveConfig(redirect = false) {
 			const count = Math.max(1, Math.min(20, parseInt($count.value || '4', 10)));
 			const nameLines = $names.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
 			const candLines = $cands.value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
@@ -66,9 +69,7 @@
 			const config = {
 				teams,
 				candidates: candLines,
-				// ウェイバー方式の有無を保存
 				waiverEnabled: !!document.getElementById('waiver-checkbox').checked,
-				// 初期ウェイバー順は teams の id 配列で追加（既存コード）
 				waiverOrder: teams.map(t => t.id)
 			};
 
@@ -83,12 +84,20 @@
 				await db.ref('teamsPassed').set(tp);
 				await db.ref('selectionConfirmed').set(sc);
 				$status.textContent = '保存しました。select ページは自動で新設定を反映します。';
+				if (redirect) {
+					// 管理画面へ遷移（select 側は draftConfig の変更を監視しているため反映される）
+					location.href = '../admin/admin.html';
+				}
 			} catch (e) {
 				console.error(e);
 				$status.textContent = '保存に失敗しました。コンソールを確認してください。';
 			}
+		}
+		$save.addEventListener('click', () => saveConfig(false));
+		$finish.addEventListener('click', () => {
+			// 保存して管理画面へ遷移
+			saveConfig(true);
 		});
-
 		$clear.addEventListener('click', async () => {
 			if (!confirm('draftConfig を削除しますか？関連データも削除されます。')) return;
 			try {
