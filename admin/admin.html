@@ -104,6 +104,7 @@
 	let teams = [];
 	let teamNames = {};
 	let waiverOrder = [];
+	let currentSelectionsMap = {}; // teamId -> selected player
 
 	// load draftConfig and render teams UI
 	configRef.on('value', snap => {
@@ -116,9 +117,13 @@
 		renderCompetitorCheckboxes();
 	});
 
-	// --- 追加: currentSelections を監視して自動でくじを作成（同一選手を複数チームが選択した場合） ---
+	// --- currentSelections を監視して UI を更新、かつ自動でくじを作成（同一選手を複数チームが選択した場合） ---
 	currentSelectionsRef.on('value', async snap => {
 		const sel = snap.val() || {};
+		// 更新マップを保持して UI 更新
+		currentSelectionsMap = sel;
+		renderTeamsControls();
+
 		// player -> [teamId,...]
 		const map = {};
 		for (const teamId of Object.keys(sel)) {
@@ -142,7 +147,7 @@
 				pickOrder = waiverOrder.filter(t => teamsPicking.includes(t));
 			}
 			if (!pickOrder || pickOrder.length === 0) {
-				// shuffle teamsPicking
+				// shuffle teamsPicking (Fisher-Yates)
 				pickOrder = teamsPicking.slice();
 				for (let i = pickOrder.length - 1; i > 0; i--) {
 					const j = Math.floor(Math.random() * (i + 1));
@@ -192,8 +197,19 @@
 			const row = document.createElement('div'); row.className='team-row';
 			const name = teamNames[id] || id;
 			const input = document.createElement('input'); input.type='text'; input.placeholder='選手名を入力'; input.id = 'sel-'+id;
-			// load current selection
-			currentSelectionsRef.child(id).once('value').then(s=> { if (s.exists()) input.value = s.val(); });
+			// 現在の選択をマップから参照（リアルタイム表示）
+			const curSel = currentSelectionsMap[id] || '';
+			if (curSel) input.value = curSel;
+			// 現在の選択表示ラベル（管理者が見やすいように）
+			const curSpan = document.createElement('span'); curSpan.style.fontWeight='700'; curSpan.style.marginRight='8px';
+			curSpan.textContent = curSel ? `現在の選択: ${curSel}` : '現在の選択: 未選択';
+			// 重複選択がある場合はハイライト
+			const counts = {};
+			Object.values(currentSelectionsMap).forEach(v => { if (v) counts[v] = (counts[v]||0) + 1; });
+			if (curSel && counts[curSel] > 1) {
+				curSpan.style.color = '#d90429';
+				curSpan.title = 'この選手は複数チームが選択しています（くじ対象）';
+			}
 			const setBtn = document.createElement('button'); setBtn.className='small'; setBtn.textContent='設定';
 			setBtn.addEventListener('click', ()=> currentSelectionsRef.child(id).set(input.value || null));
 			const confirmBtn = document.createElement('button'); confirmBtn.className='small'; confirmBtn.textContent='確定';
@@ -210,6 +226,7 @@
 				alert(name + ' に ' + player + ' を登録しました。');
 			});
 			row.appendChild(document.createTextNode(name));
+			row.appendChild(curSpan);
 			row.appendChild(input);
 			row.appendChild(setBtn);
 			row.appendChild(confirmBtn);
