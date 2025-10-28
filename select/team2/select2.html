@@ -102,6 +102,7 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
     const teamId = 'team2';
+    let acquiredPlayersListGlobal = [];
     let teams = ['team1', 'team2', 'team3', 'team4'];
     let teamNames = {};
     let allPlayers = ["仙田", "新井", "上坂", "田中", "鵜飼", "布目", "冨高", "大寺"];
@@ -110,11 +111,12 @@
     let waiverEnabled = false;
     configRef.on('value', (snap) => {
         const cfg = snap.val() || {};
+        console.log('draftConfig for team2:', cfg);
         if (Array.isArray(cfg.teams)) {
             teams = cfg.teams.map(t => t.id);
             teamNames = {}; cfg.teams.forEach((t,i)=> teamNames[t.id]=t.name || `チーム${i+1}`);
         }
-        if (cfg && Array.isArray(cfg.candidates)) allPlayers = cfg.candidates.slice();
+        if (Array.isArray(cfg.candidates)) allPlayers = cfg.candidates.slice();
         waiverEnabled = !!cfg.waiverEnabled;
         const waiverEl = document.getElementById('waiver-order');
         if (waiverEl) {
@@ -125,6 +127,10 @@
                 waiverEl.appendChild(li);
             });
         }
+    });
+    // acquiredPlayers ログも追加
+    acquiredPlayersRef.on('value', (snapshot) => {
+        console.log('acquiredPlayers for team2 updated.');
     });
 
     const roundRef = database.ref('round');

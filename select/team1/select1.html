@@ -98,7 +98,8 @@
     firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
     const teamId = 'team1';
-
+    // 全ページで使う獲得選手リストのグローバル保持
+    let acquiredPlayersListGlobal = [];
     // 初期値（フォールバック）
     let teams = ['team1', 'team2', 'team3', 'team4'];
     let teamNames = {}; // id->表示名
@@ -121,6 +122,10 @@
         waiverEnabled = !!cfg.waiverEnabled;
         // UI 更新（acquiredPlayers の表示や選択肢）
         updatePlayerOptions(acquiredPlayersListGlobal);
+    });
+    // ログを追加して設定が届いているか確認
+    configRef.on('value', (snap) => {
+        console.log('draftConfig for team1:', snap.val());
     });
 
     const roundRef = database.ref('round');
@@ -294,6 +299,7 @@
 
     acquiredPlayersRef.on('value', (snapshot) => {
         const allAcquiredData = snapshot.val() || {};
+        console.log('acquiredPlayers updated (team1):', allAcquiredData);
         let acquiredPlayersList = [];
         const listElement = document.getElementById('all-selections-list');
         listElement.innerHTML = '';
@@ -310,6 +316,7 @@
             li.textContent = `${teamName}: ${playersText}`;
             listElement.appendChild(li);
         });
+        acquiredPlayersListGlobal = acquiredPlayersList;
         updatePlayerOptions(acquiredPlayersList);
     });
 
