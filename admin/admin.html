@@ -45,9 +45,7 @@
 
 			<div id="lottery-creator" class="section">
 				<h3>くじ作成（管理者操作）</h3>
-				<label>選手名: <input id="lot-player" type="text"></label>
-				<div id="lot-competitors" style="margin-top:8px">チームを選択してください...</div>
-				<button id="start-lottery" class="small">くじを作成して開始</button>
+				<!-- 管理者による手動でのくじ作成 UI は不要のため削除しました -->
 			</div>
 
 			<div id="lotteries" class="section">
@@ -96,9 +94,6 @@
 	// ui elements
 	const roundEl = document.getElementById('round-value');
 	const teamsListEl = document.getElementById('teams-list');
-	const lotPlayerInput = document.getElementById('lot-player');
-	const lotCompetitorsEl = document.getElementById('lot-competitors');
-	const startLotteryBtn = document.getElementById('start-lottery');
 	const lotteryListEl = document.getElementById('lottery-list');
 
 	let teams = [];
@@ -114,7 +109,6 @@
 		( cfg.teams || []).forEach((t,i)=> teamNames[t.id]=t.name||`チーム${i+1}`);
 		waiverOrder = cfg.waiverOrder || teams.slice();
 		renderTeamsControls();
-		renderCompetitorCheckboxes();
 	});
 
 	// --- currentSelections を監視して UI を更新、かつ自動でくじを作成（同一選手を複数チームが選択した場合） ---
@@ -236,46 +230,6 @@
 		});
 	}
 
-	// render competitor checkboxes for lottery
-	function renderCompetitorCheckboxes(){
-		lotCompetitorsEl.innerHTML = '';
-		if (!teams.length) return;
-		teams.forEach(id=>{
-			const label = document.createElement('label'); label.style.marginRight='8px';
-			const cb = document.createElement('input'); cb.type='checkbox'; cb.value = id; cb.className='lot-cb';
-			label.appendChild(cb);
-			label.appendChild(document.createTextNode(' ' + (teamNames[id]||id)));
-			lotCompetitorsEl.appendChild(label);
-		});
-	}
-
-	// create lottery
-	startLotteryBtn.addEventListener('click', async ()=>{
-		const player = (lotPlayerInput.value || '').trim();
-		if (!player) return alert('選手名を入力してください。');
-		const checked = Array.from(document.querySelectorAll('.lot-cb')).filter(c=>c.checked).map(c=>c.value);
-		if (checked.length < 2) return alert('競合チームを2つ以上選択してください。');
-		// build lots: number equal to competing teams
-		const lots = checked.map((t,i)=> ({ id:i, isPicked:false }));
-		const pickOrder = waiverOrder && waiverOrder.length ? waiverOrder.slice() : teams.slice();
-		// ensure pickOrder contains competing teams only ordering
-		const filteredOrder = pickOrder.filter(t => checked.includes(t));
-		// if no filtered, fallback to checked as order
-		const finalOrder = filteredOrder.length ? filteredOrder : checked.slice();
-		const payload = {
-			competingTeams: checked.reduce((o,t)=>{ o[t]=true; return o; }, {}),
-			lots,
-			pickOrder: finalOrder,
-			turnIndex: 0,
-			picks: {},
-			isRevealing: false
-		};
-		await lotteriesRef.child(player).set(payload);
-		alert('くじを作成しました: ' + player);
-		lotPlayerInput.value = '';
-		Array.from(document.querySelectorAll('.lot-cb')).forEach(c=>c.checked=false);
-	});
-
 	// watch lotteries and render list
 	lotteriesRef.on('value', snap=>{
 		const data = snap.val() || {};
@@ -342,7 +296,6 @@
 	}
 
 	// helper: ensure UI initial state
-	renderCompetitorCheckboxes();
 	renderTeamsControls();
 })();
 </script>
