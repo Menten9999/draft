@@ -51,7 +51,7 @@
             width: 80%; transform: translateY(120%);
             transition: transform 0.6s cubic-bezier(.2,.8,.2,1) 0.15s;
             backface-visibility: hidden;
-            /* 描画パフォーマンス向上のヒント（封筒内の画像アニメを安定化） */
+            /* 描画パフォーマンス向上のヒント */
             will-change: transform;
             transform-style: preserve-3d;
         }
@@ -93,17 +93,13 @@
         <h3>全チームの獲得選手一覧</h3>
         <ul id="all-selections-list"></ul>
     </div>
-    <div>
-        <h3>ウェイバー順</h3>
-        <ul id="waiver-order"></ul>
-    </div>
 </main>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 <script src="../../firebase-config.js"></script>
 <script>
     if (typeof firebaseConfig === 'undefined') {
-        console.error('firebaseConfig is not defined (team2). Check draft\\firebase-config.js');
+        console.error('firebaseConfig is not defined (team4). Check draft\\firebase-config.js');
         document.getElementById('status-message').textContent = 'エラー: Firebase 設定がありません。管理者に確認してください。';
         document.querySelectorAll('input, select, button').forEach(el => el.disabled = true);
     } else {
@@ -120,12 +116,16 @@
     let waiverEnabled = false;
     configRef.on('value', (snap) => {
         const cfg = snap.val() || {};
-        console.log('draftConfig for team2:', cfg);
+        console.log('draftConfig for team4:', cfg);
         if (Array.isArray(cfg.teams)) {
             teams = cfg.teams.map(t => t.id);
-            teamNames = {}; cfg.teams.forEach((t,i)=> teamNames[t.id]=t.name || `チーム${i+1}`);
+            teamNames = {};
+            cfg.teams.forEach((t, i) => { teamNames[t.id] = t.name || `チーム${i+1}`; });
         }
-        if (Array.isArray(cfg.candidates)) allPlayers = cfg.candidates.slice();
+        if (Array.isArray(cfg.candidates)) {
+            allPlayers = cfg.candidates.slice();
+        }
+        updatePlayerOptions(acquiredPlayersListGlobal || []);
         waiverEnabled = !!cfg.waiverEnabled;
         const waiverEl = document.getElementById('waiver-order');
         if (waiverEl) {
@@ -145,7 +145,7 @@
     const acquiredPlayersRef = database.ref('acquiredPlayers');
     // acquiredPlayers の受信ログ（宣言後に配置）
     acquiredPlayersRef.on('value', (snapshot) => {
-        console.log('acquiredPlayers for team2 updated:', snapshot.val());
+        console.log('acquiredPlayers for team4 updated:', snapshot.val());
     });
     const passedRef = database.ref('teamsPassed/' + teamId);
     const lotteryRef = database.ref('lotteries');
@@ -168,7 +168,6 @@
                 const myPick = (lotteryData.picks && Object.prototype.hasOwnProperty.call(lotteryData.picks, teamId))
                     ? lotteryData.picks[teamId] : undefined;
                 isMyLottery = true;
-                // 開票アニメーションは自チームがそのくじを選択している場合のみ行う
                 if (lotteryData.isRevealing && typeof myPick !== "undefined") {
                     const resultImage = document.getElementById('result-image');
                     statusRef.once('value').then(snap => {
@@ -189,11 +188,10 @@
                     lotteryOverlay.style.display = 'none';
                     return;
                 }
-                
+
                 document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
-                // player は encodeURIComponent されている可能性があるため表示用にデコード
                 let displayPlayer = player;
-                try { displayPlayer = decodeURIComponent(player); } catch (e) { /* noop */ }
+                try { displayPlayer = decodeURIComponent(player); } catch (e) { }
                 document.getElementById('lottery-player-name').textContent = `「${displayPlayer}」選手の抽選`;
                 
                 const turnIndex = lotteryData.turnIndex || 0;
@@ -210,7 +208,7 @@
                 const myTurn = lotteryData.pickOrder[turnIndex] === teamId;
                 const lotteryBox = document.getElementById('lottery-box');
                 lotteryBox.innerHTML = '';
-                // myPick は上で定義済みを使用
+                // myPick は上で定義済みを利用（重複宣言しない）
  
                 lotteryData.lots.forEach(lot => {
                     const button = document.createElement('button');
@@ -261,7 +259,6 @@
 
         envelope.style.pointerEvents = 'none';
 
-        // ensure image is set (defensive) then animate
         statusRef.once('value').then(snapshot => {
             const message = snapshot.val();
             if (message === "交渉権獲得") {
@@ -270,15 +267,11 @@
                 resultImage.src = 'hazure.png';
             }
 
-            // force reflow
             void envelope.offsetWidth;
             envelope.classList.add('opened');
 
-            // listen for the image transition end once
             const onEnd = (e) => {
-                // only proceed for the result image
                 if (e.target && e.target.id === 'result-image') {
-                    // short pause to let user see result
                     setTimeout(() => {
                         document.getElementById('result-overlay').style.display = 'none';
                         statusRef.remove().catch(()=>{});
@@ -299,9 +292,9 @@
         try {
             const txnResult = await lotPickedRef.transaction(currentValue => {
                 if (currentValue === true) {
-                    return; // abort - already picked
+                    return;
                 }
-                return true; // claim it
+                return true;
             });
 
             if (!txnResult || !txnResult.committed) {
@@ -359,7 +352,6 @@
         document.getElementById('round-title').textContent = `第${round}巡選択希望選手選択画面`;
     });
 
-    // 選択が存在する間は同巡内で変更不可（くじで「落選」になった場合のみ再選択を許可）
     selectionRef.on('value', (snapshot) => {
         const selectedPlayer = snapshot.val();
         document.getElementById("BtnTest").textContent = selectedPlayer || "未選択";
