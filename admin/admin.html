@@ -113,53 +113,10 @@
 	});
 
 	// current selections: update UI + auto-create lotteries for conflicts
-	currentSelectionsRef.on('value', async snap => {
+	currentSelectionsRef.on('value', snap => {
+		// 表示のみ行い、自動でくじは作成しない（「選択を処理」ボタンで作成する）
 		currentSelectionsMap = snap.val() || {};
 		renderCurrentSelections();
-
-		// build player -> teams map
-		const map = {};
-		for (const teamId of Object.keys(currentSelectionsMap)) {
-			const player = currentSelectionsMap[teamId];
-			if (!player) continue;
-			(map[player] || (map[player] = [])).push(teamId);
-		}
-
-		// create lotteries for players chosen by 2+ teams (skip if exists)
-		for (const player in map) {
-			const pickingTeams = map[player];
-			if (pickingTeams.length < 2) continue;
-			const exist = await lotteriesRef.child(encodeKey(player)).once('value');
-			if (exist.exists()) continue;
-
-			// pickOrder: waiverOrder filtered if available, otherwise random
-			let pickOrder = waiverOrder.filter(t => pickingTeams.includes(t));
-			if (!pickOrder.length) {
-				pickOrder = pickingTeams.slice();
-				// Fisher-Yates shuffle
-				for (let i = pickOrder.length - 1; i > 0; i--) {
-					const j = Math.floor(Math.random() * (i + 1));
-					[pickOrder[i], pickOrder[j]] = [pickOrder[j], pickOrder[i]];
-				}
-			}
-
-			const lots = pickingTeams.map((t,i)=>({ id:i, isPicked:false }));
-			const payload = {
-				competingTeams: pickingTeams.reduce((o,t)=>{ o[t]=true; return o; }, {}),
-				lots,
-				pickOrder,
-				turnIndex: 0,
-				picks: {},
-				isRevealing: false
-			};
-			try {
-				await lotteriesRef.child(encodeKey(player)).set(payload);
-				console.log('Auto-created lottery for', player, 'teams', pickingTeams, 'order', pickOrder);
-				await systemAlertRef.set(`選手「${player}」で競合が発生しました。抽選を行ってください。`);
-			} catch (e) {
-				console.error('lottery create failed', e);
-			}
-		}
 	});
 
 	// acquired players UI
