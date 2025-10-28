@@ -128,17 +128,16 @@
             });
         }
     });
-    // acquiredPlayers ログも追加
-    acquiredPlayersRef.on('value', (snapshot) => {
-        console.log('acquiredPlayers for team2 updated.');
-    });
-
     const roundRef = database.ref('round');
     const selectionRef = database.ref('currentSelections/' + teamId);
     const statusRef = database.ref('teamStatus/' + teamId);
     const systemAlertRef = database.ref('systemAlert');
     const confirmedRef = database.ref('selectionConfirmed/' + teamId);
     const acquiredPlayersRef = database.ref('acquiredPlayers');
+    // acquiredPlayers の受信ログ（宣言後に配置）
+    acquiredPlayersRef.on('value', (snapshot) => {
+        console.log('acquiredPlayers for team2 updated:', snapshot.val());
+    });
     const passedRef = database.ref('teamsPassed/' + teamId);
     const lotteryRef = database.ref('lotteries');
 
