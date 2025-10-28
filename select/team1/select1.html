@@ -143,6 +143,7 @@
     const selectionRef = database.ref('currentSelections/' + teamId);
     const statusRef = database.ref('teamStatus/' + teamId);
     const systemAlertRef = database.ref('systemAlert');
+    const processingRef = database.ref('processing');
     const confirmedRef = database.ref('selectionConfirmed/' + teamId);
     const acquiredPlayersRef = database.ref('acquiredPlayers');
     const passedRef = database.ref('teamsPassed/' + teamId);
@@ -391,6 +392,29 @@
             overlay.style.display = 'flex';
         } else {
             overlay.style.display = 'none';
+        }
+    });
+
+    // processing フラグ監視：管理者が処理中の間は選択操作をロックして待機表示
+    processingRef.on('value', (snap) => {
+        const working = !!snap.val();
+        const selectEl = document.getElementById('pet-select');
+        const confirmBtn = document.getElementById('confirm-btn');
+        const passBtn = document.querySelector('.pass-button');
+        const waitingOverlay = document.getElementById('waiting-overlay');
+        if (working) {
+            if (selectEl) selectEl.disabled = true;
+            if (confirmBtn) confirmBtn.disabled = true;
+            if (passBtn) passBtn.disabled = true;
+            waitingOverlay.textContent = '管理者が選択を処理しています。しばらくお待ちください...';
+            waitingOverlay.style.display = 'flex';
+        } else {
+            if (selectEl) selectEl.disabled = false;
+            if (confirmBtn) confirmBtn.disabled = false;
+            if (passBtn) passBtn.disabled = false;
+            if (!document.getElementById('status-message').textContent.includes('辞退')) {
+                waitingOverlay.style.display = 'none';
+            }
         }
     });
 

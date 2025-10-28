@@ -80,6 +80,7 @@
 	const teamsPassedRef = db.ref('teamsPassed');
 	const teamStatusRef = id => db.ref('teamStatus/' + id);
 	const systemAlertRef = db.ref('systemAlert');
+	const processingRef = db.ref('processing');
 
 	// DOM
 	const roundNumberEl = document.getElementById('round-number');
@@ -191,6 +192,8 @@
 
 	// processSelections triggered by admin button: assign non-conflicts, leave conflicts to lotteries
 	processBtn.addEventListener('click', async ()=>{
+		// 管理者が処理開始を明示
+		await processingRef.set(true);
 		try {
 			const selectionsSnap = await currentSelectionsRef.once('value');
 			const selections = selectionsSnap.val() || {};
@@ -264,6 +267,9 @@
 			alert('選択処理を行いました。競合があるものは自動でくじが作成されます。');
 		} catch (e) {
 			console.error(e); alert('処理中にエラーが発生しました。コンソールを確認してください。');
+		} finally {
+			// 処理終了フラグを解除（クライアントの待機解除）
+			await processingRef.set(false).catch(()=>{});
 		}
 	});
 
