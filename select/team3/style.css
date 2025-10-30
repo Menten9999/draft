@@ -20,7 +20,14 @@ select {
 	padding: 10px 12px;
 }
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-button{cursor:pointer;border:0;padding:12px 16px;border-radius:8px;background:var(--accent);color:#fff;font-weight:700}
+button{
+	/* 元の見た目に戻す */
+	padding:10px 14px;
+	border-radius:4px;
+	background:#17a2b8;
+	color:#fff;
+	border:0;
+}
 .reset-button{background:#dc3545}.pass-button{background:#6c757d}
 #lottery-box{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
 .lot-button{min-width:120px;max-width:170px;padding:12px;background:#495057;color:#fff;border-radius:10px}
