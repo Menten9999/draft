@@ -1,0 +1,15 @@
+/* same responsive stylesheet as other select folders */
+:root{--max-width:1000px;--accent:#17a2b8;--danger:#d90429;--card-bg:#fff;--shadow:0 6px 18px rgba(0,0,0,.06)}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;padding:16px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial;color:#222;background:#f6f8fa;font-size:clamp(14px,1.6vw,16px)}
+.main,.box{max-width:min(var(--max-width),96%);margin:14px auto;padding:clamp(12px,2.5vw,20px);background:var(--card-bg);border-radius:10px;box-shadow:var(--shadow)}
+h1{font-size:clamp(18px,2.6vw,24px);margin:0 0 10px}
+input,textarea,select{width:100%;padding:10px;border-radius:8px;border:1px solid #e4e7eb}
+button{padding:10px 14px;border-radius:8px;background:var(--accent);color:#fff}
+#lottery-box{display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+.lot-button{min-width:120px;background:#495057;color:#fff;border-radius:10px}
+#result-overlay,#lottery-overlay,#waiting-overlay,#system-alert-overlay{position:fixed;inset:0;display:none;justify-content:center;align-items:center;background:rgba(0,0,0,.7)}
+.envelope{width:320px;height:220px;max-width:88vw;background:#f0e68c;border-radius:8px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+#result-image{max-width:80%}
+@media(max-width:640px){.lot-button{min-width:100px}.envelope{width:260px;height:160px}}
