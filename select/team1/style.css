@@ -62,17 +62,7 @@ select {
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 
 /* ボタン */
-button, input[type="button"], input[type="submit"]{
-	/* 元の見た目に戻す */
-	padding: 10px 14px;
-	border-radius: 4px;
-	background: #17a2b8;
-	color: #fff;
-	border: 0;
-	cursor:pointer;
-	box-shadow:none;
-	transition:transform .08s ease, box-shadow .08s ease, opacity .12s;
-}
+
 button:active{transform:translateY(1px)}
 .reset-button{background:#dc3545}
 .pass-button{background:#6c757d;color:#fff}
