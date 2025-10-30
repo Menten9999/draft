@@ -232,18 +232,6 @@
 				await acquiredRef.child(item.team).push(item.player);
 				await teamStatusRef(item.team).set('交渉権獲得');
 				await selectionConfirmedRef.child(item.team).set(true);
-				// ウェイバー順をサーバー側で一貫して更新（該当チームを末尾へ移動）
-				if (waiverEnabled) {
-					await db.ref('draftConfig/waiverOrder').transaction(current => {
-						if (!Array.isArray(current)) return current;
-						const idx = current.indexOf(item.team);
-						if (idx !== -1) {
-							current.splice(idx, 1);
-							current.push(item.team);
-						}
-						return current;
-					}).catch(()=>{});
-				}
 			}
 
 			// create lotteries for conflicts if not exist
@@ -252,9 +240,18 @@
 				const key = encodeKey(player);
 				const exist = await lotteriesRef.child(key).once('value');
 				if (exist.exists()) continue;
+				// pickOrder：ウェイバー方式が有効なら最新の draftConfig/waiverOrder を DB から取得して適用する
 				let pickOrder = [];
-				if (waiverEnabled && Array.isArray(waiverOrder) && waiverOrder.length) {
-					pickOrder = waiverOrder.filter(t => pickingTeams.includes(t));
+				if (waiverEnabled) {
+					try {
+						const waiverSnap = await db.ref('draftConfig/waiverOrder').once('value');
+						const remoteWaiver = waiverSnap.val() || [];
+						if (Array.isArray(remoteWaiver) && remoteWaiver.length) {
+							pickOrder = remoteWaiver.filter(t => pickingTeams.includes(t));
+						}
+					} catch (e) {
+						console.warn('failed to load waiverOrder, falling back to random', e);
+					}
 				}
 				if (!pickOrder || pickOrder.length === 0) {
 					pickOrder = pickingTeams.slice();
@@ -354,10 +351,10 @@
 			const teamsIn = Object.keys(data.competingTeams || {});
 			if (!winnerTeam) winnerTeam = teamsIn[Math.floor(Math.random() * teamsIn.length)];
 
-			// assign winner
+			// assign winner (acquiredPlayers に保存)
 			await acquiredRef.child(winnerTeam).push(decodeKey(key));
-			// ウェイバー順をサーバー側で更新（勝者を末尾へ移動）
-			if (waiverEnabled) {
+			// ウェイバー順もサーバー側で末尾に移動しておく（クライアントの transaction に依存せず確実に更新）
+			try {
 				await db.ref('draftConfig/waiverOrder').transaction(current => {
 					if (!Array.isArray(current)) return current;
 					const idx = current.indexOf(winnerTeam);
@@ -366,8 +363,11 @@
 						current.push(winnerTeam);
 					}
 					return current;
-				}).catch(()=>{});
+				});
+			} catch (e) {
+				console.warn('waiverOrder transaction failed', e);
 			}
+
 			for (const t of teamsIn) {
 				if (t === winnerTeam) {
 					await teamStatusRef(t).set('交渉権獲得');

@@ -332,51 +332,48 @@
         }
     }
 
-    // 正規化ユーティリティ（空白削除 + Unicode 正規化）
-    function normName(s) { return (s||'').toString().trim().normalize('NFC'); }
-
+    // acquiredPlayers を再帰的に走査して文字列だけを抽出（ネストされた push キー / 配列 / オブジェクト に対応）
+    function _collectAcquiredStrings(node, out) {
+        if (node == null) return;
+        if (typeof node === 'string') { out.push(node); return; }
+        if (Array.isArray(node)) { node.forEach(x=>_collectAcquiredStrings(x,out)); return; }
+        if (typeof node === 'object') { Object.values(node).forEach(x=>_collectAcquiredStrings(x,out)); return; }
+    }
     acquiredPlayersRef.on('value', (snapshot) => {
         const allAcquiredData = snapshot.val() || {};
-        let acquiredPlayersList = [];
         const listElement = document.getElementById('all-selections-list');
         listElement.innerHTML = '';
+        // チームごとの表示を作成（既存表示ロジックを維持）
+        const flat = [];
         teams.forEach((team, index) => {
             const teamName = teamNames[team] || `チーム${index + 1}`;
-            const playersData = allAcquiredData[team] || {};
-            const teamPlayers = Object.values(playersData || {}).map(p => normName(p));
-            acquiredPlayersList = acquiredPlayersList.concat(teamPlayers);
+            const playersData = allAcquiredData[team];
+            const teamPlayers = [];
+            _collectAcquiredStrings(playersData, teamPlayers);
+            const playersText = teamPlayers.length ? teamPlayers.join(', ') : 'なし';
             const li = document.createElement('li');
-            li.textContent = `${teamName}: ${ teamPlayers.length ? teamPlayers.join(', ') : 'なし' }`;
+            li.textContent = `${teamName}: ${playersText}`;
             listElement.appendChild(li);
+            flat.push(...teamPlayers);
         });
-        // 重複排除してグローバル更新
-        acquiredPlayersListGlobal = Array.from(new Set(acquiredPlayersList));
-        updatePlayerOptions(acquiredPlayersListGlobal);
+        // 重複除去してグローバルに保持し、選択肢更新に渡す
+        const unique = Array.from(new Set(flat));
+        acquiredPlayersListGlobal = unique;
+        updatePlayerOptions(unique);
     });
 
-    function updatePlayerOptions(acquiredList) {
+    function updatePlayerOptions(acquiredPlayersList) {
         const selectElement = document.getElementById('pet-select');
         const currentSelectedValue = selectElement.value;
-        const currentSelectedNorm = normName(currentSelectedValue);
         selectElement.innerHTML = '<option value="">--選手を選択してください--</option>';
-        const acquiredSet = new Set((acquiredList || []).map(n=>normName(n)));
-        (allPlayers || []).forEach(player => {
-            const n = normName(player);
-            if (!acquiredSet.has(n)) {
-                const option = document.createElement('option');
-                option.value = player;
-                option.textContent = player;
-                selectElement.appendChild(option);
-            }
+        const availablePlayers = allPlayers.filter(player => !acquiredPlayersList.includes(player));
+        availablePlayers.forEach(player => {
+            const option = document.createElement('option');
+            option.value = player;
+            option.textContent = player;
+            selectElement.appendChild(option);
         });
-        // 現在選択値が既に獲得されていたら選択を解除して UI を更新
-        if (currentSelectedValue && acquiredSet.has(currentSelectedNorm)) {
-            selectElement.value = '';
-            // 既にサーバーに登録されている currentSelections を残すかは仕様次第。
-            // ここでは UI 側をクリアするのみ。
-        } else {
-            selectElement.value = currentSelectedValue;
-        }
+        selectElement.value = currentSelectedValue;
     }
 
     roundRef.on('value', (snapshot) => {
