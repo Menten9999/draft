@@ -232,6 +232,18 @@
 				await acquiredRef.child(item.team).push(item.player);
 				await teamStatusRef(item.team).set('交渉権獲得');
 				await selectionConfirmedRef.child(item.team).set(true);
+				// ウェイバー順をサーバー側で一貫して更新（該当チームを末尾へ移動）
+				if (waiverEnabled) {
+					await db.ref('draftConfig/waiverOrder').transaction(current => {
+						if (!Array.isArray(current)) return current;
+						const idx = current.indexOf(item.team);
+						if (idx !== -1) {
+							current.splice(idx, 1);
+							current.push(item.team);
+						}
+						return current;
+					}).catch(()=>{});
+				}
 			}
 
 			// create lotteries for conflicts if not exist
@@ -344,6 +356,18 @@
 
 			// assign winner
 			await acquiredRef.child(winnerTeam).push(decodeKey(key));
+			// ウェイバー順をサーバー側で更新（勝者を末尾へ移動）
+			if (waiverEnabled) {
+				await db.ref('draftConfig/waiverOrder').transaction(current => {
+					if (!Array.isArray(current)) return current;
+					const idx = current.indexOf(winnerTeam);
+					if (idx !== -1) {
+						current.splice(idx, 1);
+						current.push(winnerTeam);
+					}
+					return current;
+				}).catch(()=>{});
+			}
 			for (const t of teamsIn) {
 				if (t === winnerTeam) {
 					await teamStatusRef(t).set('交渉権獲得');

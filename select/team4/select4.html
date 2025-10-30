@@ -157,6 +157,57 @@
     const acquiredPlayersRef = database.ref('acquiredPlayers');
     // acquiredPlayers の受信ログ（宣言後に配置）
     acquiredPlayersRef.on('value', (snapshot) => {
+        const allAcquiredData = snapshot.val() || {};
+        let acquiredPlayersList = [];
+        const listElement = document.getElementById('all-selections-list');
+        listElement.innerHTML = '';
+        teams.forEach((team, index) => {
+            const teamName = teamNames[team] || `チーム${index + 1}`;
+            const playersData = allAcquiredData[team] || {};
+            const teamPlayers = Object.values(playersData).map(p => normName(p));
+            acquiredPlayersList = acquiredPlayersList.concat(teamPlayers);
+            const li = document.createElement('li');
+            li.textContent = `${teamName}: ${ teamPlayers.length ? teamPlayers.join(', ') : 'なし' }`;
+            listElement.appendChild(li);
+        });
+        acquiredPlayersListGlobal = Array.from(new Set(acquiredPlayersList));
+        updatePlayerOptions(acquiredPlayersListGlobal);
+    });
+
+    // 正規化ユーティリティ（空白削除 + Unicode 正規化）
+    function normName(s) { return (s||'').toString().trim().normalize('NFC'); }
+
+    function updatePlayerOptions(acquiredList) {
+        const selectElement = document.getElementById('pet-select');
+        const currentSelectedValue = selectElement.value;
+        const currentSelectedNorm = normName(currentSelectedValue);
+        selectElement.innerHTML = '<option value="">--選手を選択してください--</option>';
+        const acquiredSet = new Set((acquiredList || []).map(n=>normName(n)));
+        (allPlayers || []).forEach(player => {
+            const n = normName(player);
+            if (!acquiredSet.has(n)) {
+                const option = document.createElement('option');
+                option.value = player;
+                option.textContent = player;
+                selectElement.appendChild(option);
+            }
+        });
+        if (currentSelectedValue && acquiredSet.has(currentSelectedNorm)) {
+            selectElement.value = '';
+        } else {
+            selectElement.value = currentSelectedValue;
+        }
+    }
+
+    const roundRef = database.ref('round');
+    const selectionRef = database.ref('currentSelections/' + teamId);
+    const statusRef = database.ref('teamStatus/' + teamId);
+    const systemAlertRef = database.ref('systemAlert');
+    const processingRef = database.ref('processing');
+    const confirmedRef = database.ref('selectionConfirmed/' + teamId);
+    const acquiredPlayersRef = database.ref('acquiredPlayers');
+    // acquiredPlayers の受信ログ（宣言後に配置）
+    acquiredPlayersRef.on('value', (snapshot) => {
         console.log('acquiredPlayers for team4 updated:', snapshot.val());
     });
     const passedRef = database.ref('teamsPassed/' + teamId);
@@ -336,32 +387,37 @@
         listElement.innerHTML = '';
         teams.forEach((team, index) => {
             const teamName = teamNames[team] || `チーム${index + 1}`;
-            const playersData = allAcquiredData[team];
-            let playersText = 'なし';
-            if (playersData) {
-                const teamPlayers = Object.values(playersData);
-                acquiredPlayersList = acquiredPlayersList.concat(teamPlayers);
-                playersText = teamPlayers.join(', ');
-            }
+            const playersData = allAcquiredData[team] || {};
+            const teamPlayers = Object.values(playersData).map(p => normName(p));
+            acquiredPlayersList = acquiredPlayersList.concat(teamPlayers);
             const li = document.createElement('li');
-            li.textContent = `${teamName}: ${playersText}`;
+            li.textContent = `${teamName}: ${ teamPlayers.length ? teamPlayers.join(', ') : 'なし' }`;
             listElement.appendChild(li);
         });
-        updatePlayerOptions(acquiredPlayersList);
+        acquiredPlayersListGlobal = Array.from(new Set(acquiredPlayersList));
+        updatePlayerOptions(acquiredPlayersListGlobal);
     });
 
-    function updatePlayerOptions(acquiredPlayersList) {
+    function updatePlayerOptions(acquiredList) {
         const selectElement = document.getElementById('pet-select');
         const currentSelectedValue = selectElement.value;
+        const currentSelectedNorm = normName(currentSelectedValue);
         selectElement.innerHTML = '<option value="">--選手を選択してください--</option>';
-        const availablePlayers = allPlayers.filter(player => !acquiredPlayersList.includes(player));
-        availablePlayers.forEach(player => {
-            const option = document.createElement('option');
-            option.value = player;
-            option.textContent = player;
-            selectElement.appendChild(option);
+        const acquiredSet = new Set((acquiredList || []).map(n=>normName(n)));
+        (allPlayers || []).forEach(player => {
+            const n = normName(player);
+            if (!acquiredSet.has(n)) {
+                const option = document.createElement('option');
+                option.value = player;
+                option.textContent = player;
+                selectElement.appendChild(option);
+            }
         });
-        selectElement.value = currentSelectedValue;
+        if (currentSelectedValue && acquiredSet.has(currentSelectedNorm)) {
+            selectElement.value = '';
+        } else {
+            selectElement.value = currentSelectedValue;
+        }
     }
 
     roundRef.on('value', (snapshot) => {
