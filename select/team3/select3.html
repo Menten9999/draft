@@ -182,11 +182,12 @@
                         } else {
                             resultImage.src = '';
                         }
-
                         resultOverlay.style.display = 'flex';
                         const envelope = resultOverlay.querySelector('.envelope');
                         envelope.classList.remove('opened');
-                        setTimeout(() => openEnvelope(), 200);
+                        envelope.style.pointerEvents = '';
+                        const hint = document.getElementById('status-message');
+                        if (hint) hint.textContent = '封筒をタップして結果を開封してください。';
                     });
                     lotteryOverlay.style.display = 'none';
                     return;
@@ -282,6 +283,8 @@
                         statusRef.remove().catch(()=>{});
                         envelope.classList.remove('opened');
                         envelope.style.pointerEvents = '';
+                        const hint = document.getElementById('status-message');
+                        if (hint) hint.textContent = '';
                     }, 900);
                 }
             };
