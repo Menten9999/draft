@@ -151,14 +151,24 @@
 		});
 	}
 
+	// ネスト構造の acquiredPlayers を走査して文字列を回収 -> trim → 一意化して表示
+	function _collectStrings(node, out) {
+		if (node == null) return;
+		if (typeof node === 'string') { out.push(node.toString().trim()); return; }
+		if (Array.isArray(node)) { node.forEach(x => _collectStrings(x, out)); return; }
+		if (typeof node === 'object') { Object.values(node).forEach(x => _collectStrings(x, out)); return; }
+	}
 	function renderAcquiredPlayers(val){
 		acquiredPlayersListEl.innerHTML = '';
 		const all = val || {};
 		teams.forEach((teamId, i) => {
 			const name = teamNames[teamId] || `チーム${i+1}`;
-			const arr = all[teamId] ? Object.values(all[teamId]) : [];
+			const collected = [];
+			_collectStrings(all[teamId], collected);
+			// 空文字を除き一意化
+			const unique = Array.from(new Set(collected.map(s => (s||'').toString().trim()).filter(Boolean)));
 			const li = document.createElement('li');
-			li.textContent = `${name}: ${ arr.length ? arr.join(', ') : 'なし' }`;
+			li.textContent = `${name}: ${ unique.length ? unique.join(', ') : 'なし' }`;
 			acquiredPlayersListEl.appendChild(li);
 		});
 	}

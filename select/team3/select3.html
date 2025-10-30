@@ -249,9 +249,9 @@
     
     statusRef.on('value', (snapshot) => {
         const message = snapshot.val();
-        if (!message) return;
-
+        const hintEl = document.getElementById('status-message');
         const resultImage = document.getElementById('result-image');
+        if (!message) { if (hintEl) hintEl.textContent = ''; return; }
         if (message === "交渉権獲得") {
             resultImage.src = 'atari.png';
             if (waiverEnabled) {
@@ -265,8 +265,12 @@
                     return current;
                 }).catch(()=>{});
             }
+            if (hintEl) hintEl.textContent = '';
         } else if (message.includes("落選")) {
             resultImage.src = 'hazure.png';
+            if (hintEl) hintEl.textContent = '再度選手を選択してください';
+        } else {
+            if (hintEl) hintEl.textContent = '';
         }
     });
 
@@ -335,7 +339,7 @@
 
     function _collectAcquiredStrings(node, out) {
         if (node == null) return;
-        if (typeof node === 'string') { out.push(node); return; }
+        if (typeof node === 'string') { out.push(node.toString().trim()); return; }
         if (Array.isArray(node)) { node.forEach(x=>_collectAcquiredStrings(x,out)); return; }
         if (typeof node === 'object') { Object.values(node).forEach(x=>_collectAcquiredStrings(x,out)); return; }
     }
@@ -349,29 +353,31 @@
             const playersData = allAcquiredData[team];
             const teamPlayers = [];
             _collectAcquiredStrings(playersData, teamPlayers);
-            const playersText = teamPlayers.length ? teamPlayers.join(', ') : 'なし';
+            const cleaned = teamPlayers.map(s => (s||'').toString().trim()).filter(Boolean);
+            const playersText = cleaned.length ? Array.from(new Set(cleaned)).join(', ') : 'なし';
             const li = document.createElement('li');
             li.textContent = `${teamName}: ${playersText}`;
             listElement.appendChild(li);
-            flat.push(...teamPlayers);
+            flat.push(...cleaned);
         });
         const unique = Array.from(new Set(flat));
         acquiredPlayersListGlobal = unique;
         updatePlayerOptions(unique);
     });
-
+    
     function updatePlayerOptions(acquiredPlayersList) {
         const selectElement = document.getElementById('pet-select');
         const currentSelectedValue = selectElement.value;
         selectElement.innerHTML = '<option value="">--選手を選択してください--</option>';
-        const availablePlayers = allPlayers.filter(player => !acquiredPlayersList.includes(player));
+        const taken = new Set((acquiredPlayersList || []).map(p => (p||'').toString().trim()).filter(Boolean));
+        const availablePlayers = allPlayers.filter(player => !taken.has((player||'').toString().trim()));
         availablePlayers.forEach(player => {
             const option = document.createElement('option');
             option.value = player;
             option.textContent = player;
             selectElement.appendChild(option);
         });
-        selectElement.value = currentSelectedValue;
+        selectElement.value = taken.has((currentSelectedValue||'').toString().trim()) ? '' : currentSelectedValue;
     }
 
     roundRef.on('value', (snapshot) => {

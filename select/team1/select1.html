@@ -248,23 +248,21 @@
     
     statusRef.on('value', (snapshot) => {
         const message = snapshot.val();
-        if (!message) return;
-
+        const hintEl = document.getElementById('status-message');
         const resultImage = document.getElementById('result-image');
+        if (!message) {
+            if (hintEl) hintEl.textContent = '';
+            return;
+        }
         if (message === "交渉権獲得") {
             resultImage.src = 'atari.png';
-            // ウェイバー順を自チームを末尾に移動して更新（原子）
-            waiverRef.transaction(current => {
-                if (!Array.isArray(current)) return current;
-                const idx = current.indexOf(teamId);
-                if (idx !== -1) {
-                    current.splice(idx, 1);
-                    current.push(teamId);
-                }
-                return current;
-            }).catch(()=>{});
+            if (hintEl) hintEl.textContent = '';
+            // ウェイバー処理...
         } else if (message.includes("落選")) {
             resultImage.src = 'hazure.png';
+            if (hintEl) hintEl.textContent = '再度選手を選択してください';
+        } else {
+            if (hintEl) hintEl.textContent = '';
         }
     });
 
@@ -332,10 +330,9 @@
         }
     }
 
-    // acquiredPlayers を再帰的に走査して文字列だけを抽出（ネストされた push キー / 配列 / オブジェクト に対応）
     function _collectAcquiredStrings(node, out) {
         if (node == null) return;
-        if (typeof node === 'string') { out.push(node); return; }
+        if (typeof node === 'string') { out.push(node.toString().trim()); return; }
         if (Array.isArray(node)) { node.forEach(x=>_collectAcquiredStrings(x,out)); return; }
         if (typeof node === 'object') { Object.values(node).forEach(x=>_collectAcquiredStrings(x,out)); return; }
     }
@@ -343,20 +340,20 @@
         const allAcquiredData = snapshot.val() || {};
         const listElement = document.getElementById('all-selections-list');
         listElement.innerHTML = '';
-        // チームごとの表示を作成（既存表示ロジックを維持）
         const flat = [];
         teams.forEach((team, index) => {
             const teamName = teamNames[team] || `チーム${index + 1}`;
             const playersData = allAcquiredData[team];
             const teamPlayers = [];
             _collectAcquiredStrings(playersData, teamPlayers);
-            const playersText = teamPlayers.length ? teamPlayers.join(', ') : 'なし';
+            const cleaned = teamPlayers.map(s => (s||'').toString().trim()).filter(Boolean);
+            const playersText = cleaned.length ? Array.from(new Set(cleaned)).join(', ') : 'なし';
             const li = document.createElement('li');
             li.textContent = `${teamName}: ${playersText}`;
             listElement.appendChild(li);
-            flat.push(...teamPlayers);
+            flat.push(...cleaned);
         });
-        // 重複除去してグローバルに保持し、選択肢更新に渡す
+        // 全体は一意化して保持（重複表示を防止）
         const unique = Array.from(new Set(flat));
         acquiredPlayersListGlobal = unique;
         updatePlayerOptions(unique);
@@ -366,14 +363,16 @@
         const selectElement = document.getElementById('pet-select');
         const currentSelectedValue = selectElement.value;
         selectElement.innerHTML = '<option value="">--選手を選択してください--</option>';
-        const availablePlayers = allPlayers.filter(player => !acquiredPlayersList.includes(player));
+        const taken = new Set((acquiredPlayersList || []).map(p => (p||'').toString().trim()).filter(Boolean));
+        const availablePlayers = allPlayers.filter(player => !taken.has((player||'').toString().trim()));
         availablePlayers.forEach(player => {
             const option = document.createElement('option');
             option.value = player;
             option.textContent = player;
             selectElement.appendChild(option);
         });
-        selectElement.value = currentSelectedValue;
+        // 現在選択が利用不可になっていれば空にする
+        selectElement.value = taken.has((currentSelectedValue||'').toString().trim()) ? '' : currentSelectedValue;
     }
 
     roundRef.on('value', (snapshot) => {
