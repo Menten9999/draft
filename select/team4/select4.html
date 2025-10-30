@@ -185,7 +185,8 @@
                         envelope.classList.remove('opened');
                         envelope.style.pointerEvents = '';
                         const hint = document.getElementById('status-message');
-                        if (hint) hint.textContent = '封筒をタップして結果を開封してください。';
+                        const hintText = (message && message.includes('落選')) ? '再度選手を選択してください' : '封筒をタップして結果を開封してください。';
+                        if (hint) hint.textContent = hintText;
                     });
                     lotteryOverlay.style.display = 'none';
                     return;

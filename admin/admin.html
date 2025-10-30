@@ -97,6 +97,8 @@
 	let waiverOrder = [];      // array of team ids (if provided)
 	let waiverEnabled = false; // draftConfig のフラグを反映
 	let currentSelectionsMap = {}; // latest currentSelections snapshot
+	// 各開票の表示保持時間（ミリ秒）
+	const REVEAL_MS = 30000;
 
 	// load config (teams, candidates, waiverOrder)
 	configRef.on('value', snap => {
@@ -278,7 +280,25 @@
 	// 次巡へ進めるかを判定して進める（くじが残っていないこと、全チームが確定か永久パスしていること）
 	async function tryAdvanceRound(){
 		const lotsSnap = await lotteriesRef.once('value');
-		if (lotsSnap.exists()) return; // くじが残っているなら進めない
+		if (lotsSnap.exists()) {
+			// もし残っているくじが全部「開票済」でかつ開票から REVEAL_MS 経過していれば進める。
+			// そうでなければ進めない（まだ表示中のくじがある）。
+			const now = Date.now();
+			let allRevealedAndExpired = true;
+			lotsSnap.forEach(child => {
+				const v = child.val() || {};
+				if (!v.isRevealing) {
+					allRevealedAndExpired = false;
+					return true; // stop iterating early
+				}
+				if (!v.revealedAt || (now - v.revealedAt) < REVEAL_MS) {
+					allRevealedAndExpired = false;
+					return true;
+				}
+			});
+			if (!allRevealedAndExpired) return;
+			// 全て開票済かつ表示期間が終わっているので、進行を続行（下の判定へ）
+		}
 		const confirmedSnap = await selectionConfirmedRef.once('value');
 		const confirmed = confirmedSnap.val() || {};
 		const passedSnap = await teamsPassedRef.once('value');
@@ -302,8 +322,9 @@
 			const data = snap.val();
 			if (!data) return alert('くじデータが取得できません');
 
-			// mark revealing so clients show animation
+			// mark revealing so clients show animation（サーバー時刻で開票タイムスタンプも保存）
 			await lotteriesRef.child(key).child('isRevealing').set(true);
+			await lotteriesRef.child(key).child('revealedAt').set(firebase.database.ServerValue.TIMESTAMP);
 
 			// decide winner: if a winning lot marked exists use it; otherwise random by available picks
 			let winnerTeam = null;
@@ -332,9 +353,8 @@
 				}
 			}
 
-			// remove lottery after short delay to let clients animate
-			// 30秒表示させるため 2000ms -> 30000ms に変更
-			setTimeout(()=> lotteriesRef.child(key).remove().catch(()=>{}), 30000);
+			// remove lottery after short delay to let clients animate（各選手ごとに個別タイマー）
+			setTimeout(()=> lotteriesRef.child(key).remove().catch(()=>{}), REVEAL_MS);
 			await systemAlertRef.remove();
 			alert(`${teamNames[winnerTeam]||winnerTeam} を獲得者として確定しました。`);
 		} catch (e) {
