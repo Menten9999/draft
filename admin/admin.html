@@ -192,9 +192,8 @@
 
 	// processSelections triggered by admin button: assign non-conflicts, leave conflicts to lotteries
 	processBtn.addEventListener('click', async ()=>{
-		// 管理者が処理開始を明示
-		await processingRef.set(true);
 		try {
+			// 先に選択未完了チェックを行い、途中 return しても processing フラグが残らないようにする
 			const selectionsSnap = await currentSelectionsRef.once('value');
 			const selections = selectionsSnap.val() || {};
 			const confirmedSnap = await selectionConfirmedRef.once('value');
@@ -203,12 +202,14 @@
 			const passed = passedSnap.val() || {};
 			// active teams: not passed and not yet confirmed
 			const activeTeams = teams.filter(t => !(passed && passed[t]) && !(confirmed && confirmed[t]));
-			// ensure all active teams have a selection (could be '未選択' as empty)
 			for (const t of activeTeams) {
 				if (!selections[t]) {
 					return alert('まだ選択を終えていないチームがあります。');
 				}
 			}
+
+			// checks passed -> set processing flag
+			await processingRef.set(true);
 
 			// build map player -> teams
 			const map = {};
@@ -237,7 +238,6 @@
 				const key = encodeKey(player);
 				const exist = await lotteriesRef.child(key).once('value');
 				if (exist.exists()) continue;
-				// pickOrder はウェイバー方式が有効な場合のみ waiverOrder を利用、そうでなければランダム
 				let pickOrder = [];
 				if (waiverEnabled && Array.isArray(waiverOrder) && waiverOrder.length) {
 					pickOrder = waiverOrder.filter(t => pickingTeams.includes(t));
@@ -268,10 +268,31 @@
 		} catch (e) {
 			console.error(e); alert('処理中にエラーが発生しました。コンソールを確認してください。');
 		} finally {
-			// 処理終了フラグを解除（クライアントの待機解除）
+			// 処理フラグ解除
 			await processingRef.set(false).catch(()=>{});
+			// くじが無ければ次巡へ（存在するくじがある場合はここで進めない）
+			await tryAdvanceRound().catch(()=>{});
 		}
 	});
+
+	// 次巡へ進めるかを判定して進める（くじが残っていないこと、全チームが確定か永久パスしていること）
+	async function tryAdvanceRound(){
+		const lotsSnap = await lotteriesRef.once('value');
+		if (lotsSnap.exists()) return; // くじが残っているなら進めない
+		const confirmedSnap = await selectionConfirmedRef.once('value');
+		const confirmed = confirmedSnap.val() || {};
+		const passedSnap = await teamsPassedRef.once('value');
+		const passed = passedSnap.val() || {};
+		// 全チームが確定済みか永久パスなら進行
+		const allDone = teams.length > 0 && teams.every(t => (passed && passed[t]) || (confirmed && confirmed[t]));
+		if (!allDone) return;
+		// advance round
+		const curr = (await roundRef.once('value')).val() || 1;
+		await roundRef.set(curr + 1);
+		// 次巡に備えて selectionConfirmed をクリア（チームの確定フラグをリセット）
+		await selectionConfirmedRef.set(null);
+		console.log('Round advanced to', curr + 1);
+	}
 
 	// revealLotteryResults: admin triggers opening/result assign
 	async function revealLotteryResults(playerKey){
@@ -312,7 +333,8 @@
 			}
 
 			// remove lottery after short delay to let clients animate
-			setTimeout(()=> lotteriesRef.child(key).remove().catch(()=>{}), 2000);
+			// 30秒表示させるため 2000ms -> 30000ms に変更
+			setTimeout(()=> lotteriesRef.child(key).remove().catch(()=>{}), 30000);
 			await systemAlertRef.remove();
 			alert(`${teamNames[winnerTeam]||winnerTeam} を獲得者として確定しました。`);
 		} catch (e) {
