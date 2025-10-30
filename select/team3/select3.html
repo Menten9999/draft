@@ -362,6 +362,7 @@
         document.getElementById('round-title').textContent = `第${round}巡選択希望選手選択画面`;
     });
 
+    // 選択が存在する間は同巡内で変更不可（くじで「落選」になった場合のみ再選択を許可）
     selectionRef.on('value', (snapshot) => {
         const selectedPlayer = snapshot.val();
         document.getElementById("BtnTest").textContent = selectedPlayer || "未選択";
@@ -369,19 +370,35 @@
 
         const selectEl = document.getElementById('pet-select');
         const confirmBtn = document.getElementById('confirm-btn');
-        if (selectedPlayer) {
-            statusRef.once('value').then(snap => {
-                const msg = (snap.val() || '').toString();
-                const isLoser = msg && msg.includes('落選');
-                selectEl.disabled = !isLoser;
-                confirmBtn.disabled = !isLoser;
-                document.getElementById('status-message').textContent = isLoser ? '' : '※ 選択済みのため、この巡では変更できません。';
-            }).catch(()=>{});
-        } else {
+
+        if (!selectedPlayer) {
             selectEl.disabled = false;
             confirmBtn.disabled = false;
             document.getElementById('status-message').textContent = '';
+            return;
         }
+
+        Promise.all([
+            statusRef.once('value'),
+            (async () => {
+                try {
+                    const key = encodeURIComponent(selectedPlayer);
+                    const s = await database.ref('lotteries').child(key).once('value');
+                    return s.val();
+                } catch (e) { return null; }
+            })()
+        ]).then(([statusSnap, lotteryData]) => {
+            const msg = (statusSnap.val() || '').toString();
+            const isLoser = msg && msg.includes('落選');
+            const locked = !isLoser;
+            selectEl.disabled = locked;
+            confirmBtn.disabled = locked;
+            document.getElementById('status-message').textContent = isLoser ? '' : '※ 選択済みのため、この巡では変更できません。';
+        }).catch(()=> {
+            selectEl.disabled = true;
+            confirmBtn.disabled = true;
+            document.getElementById('status-message').textContent = '※ 選択済みのため、この巡では変更できません。';
+        });
     });
     
     systemAlertRef.on('value', (snapshot) => {

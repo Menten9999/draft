@@ -371,25 +371,39 @@
 
         const selectEl = document.getElementById('pet-select');
         const confirmBtn = document.getElementById('confirm-btn');
-        // 選択が存在し、かつステータスが「落選」を含まないならロック
-        if (selectedPlayer) {
-            statusRef.once('value').then(snap => {
-                const msg = (snap.val() || '').toString();
-                const isLoser = msg && msg.includes('落選');
-                selectEl.disabled = !isLoser; // 落選なら選べる（再選択）、それ以外はロック
-                confirmBtn.disabled = !isLoser;
-                if (!isLoser) {
-                    document.getElementById('status-message').textContent = '※ 選択済みのため、この巡では変更できません。';
-                } else {
-                    document.getElementById('status-message').textContent = '';
-                }
-            }).catch(()=>{ /* noop */ });
-        } else {
+
+        if (!selectedPlayer) {
             // 未選択なら通常状態
             selectEl.disabled = false;
             confirmBtn.disabled = false;
             document.getElementById('status-message').textContent = '';
+            return;
         }
+
+        // 選択済：ステータスと lotteries を参照して「落選」かどうかを判定する。
+        Promise.all([
+            statusRef.once('value'),
+            (async () => {
+                try {
+                    const key = encodeURIComponent(selectedPlayer);
+                    const s = await database.ref('lotteries').child(key).once('value');
+                    return s.val();
+                } catch (e) { return null; }
+            })()
+        ]).then(([statusSnap, lotteryData]) => {
+            const msg = (statusSnap.val() || '').toString();
+            const isLoser = msg && msg.includes('落選');
+            // ロック条件: 落選でない限りロック（くじ進行中や未判定も含む）
+            const locked = !isLoser;
+            selectEl.disabled = locked;
+            confirmBtn.disabled = locked;
+            document.getElementById('status-message').textContent = isLoser ? '' : '※ 選択済みのため、この巡では変更できません。';
+        }).catch(()=> {
+            // エラー時は保守的にロック
+            selectEl.disabled = true;
+            confirmBtn.disabled = true;
+            document.getElementById('status-message').textContent = '※ 選択済みのため、この巡では変更できません。';
+        });
     });
     
     systemAlertRef.on('value', (snapshot) => {
