@@ -151,25 +151,36 @@
 		});
 	}
 
-	// ネスト構造の acquiredPlayers を走査して文字列を回収 -> trim → 一意化して表示
-	function _collectStrings(node, out) {
+	// acquiredPlayers のネスト（pushキー / 配列 / オブジェクト）を再帰的に走査して文字列を回収
+	function _collectStrings(node, out){
 		if (node == null) return;
 		if (typeof node === 'string') { out.push(node.toString().trim()); return; }
-		if (Array.isArray(node)) { node.forEach(x => _collectStrings(x, out)); return; }
-		if (typeof node === 'object') { Object.values(node).forEach(x => _collectStrings(x, out)); return; }
+		if (typeof node === 'number' || typeof node === 'boolean') { out.push(String(node)); return; }
+		if (Array.isArray(node)) { node.forEach(x => _collectStrings(x,out)); return; }
+		if (typeof node === 'object') { Object.values(node).forEach(x => _collectStrings(x,out)); return; }
 	}
+	// 表示用レンダー：チームごとに収集・trim・空除去・一意化して表示
 	function renderAcquiredPlayers(val){
+		if (!acquiredPlayersListEl) return;
 		acquiredPlayersListEl.innerHTML = '';
 		const all = val || {};
 		teams.forEach((teamId, i) => {
 			const name = teamNames[teamId] || `チーム${i+1}`;
 			const collected = [];
 			_collectStrings(all[teamId], collected);
-			// 空文字を除き一意化
-			const unique = Array.from(new Set(collected.map(s => (s||'').toString().trim()).filter(Boolean)));
+			const cleaned = collected.map(s => (s||'').toString().trim()).filter(Boolean);
+			const unique = Array.from(new Set(cleaned));
 			const li = document.createElement('li');
 			li.textContent = `${name}: ${ unique.length ? unique.join(', ') : 'なし' }`;
 			acquiredPlayersListEl.appendChild(li);
+		});
+	}
+
+	// acquiredPlayers の変化に対してレンダリング（既存の ref 名に合わせて設定）
+	if (typeof acquiredPlayersRef !== 'undefined') {
+		acquiredPlayersRef.off && acquiredPlayersRef.off('value');
+		acquiredPlayersRef.on('value', snap => {
+			renderAcquiredPlayers(snap.val());
 		});
 	}
 
