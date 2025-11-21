@@ -24,23 +24,26 @@ html, body {
 	/* 追加: 全ページを中央寄せするための簡易レイアウト */
 	display: flex;
 	flex-direction: column;
-	align-items: center; /* 横方向中央 */
-	justify-content: flex-start; /* 縦方向は上寄せ（必要なら center に） */
+	align-items: center;      /* 横方向中央 */
+	justify-content: flex-start; /* 縦方向は上寄せ（必要なら center に変更） */
 	min-height: 100vh;
 }
 
-/* 中央のラッパー（スマホもPCもいい感じに） */
-.main {
+/* 中央ラッパー（ファイル内の既存 `.main` / `.wrapper` などに合わせて調整） */
+.main, .wrapper, #login-main {
 	width: 100%;
-	max-width: var(--max-width);
-	margin: 24px auto;
-	padding: clamp(var(--padding-xs), var(--padding-sm), var(--padding-lg));
-	box-sizing: border-box;
-	display: block;
-
-	/* 追加: 横中央揃えを確実にする（flex 親下で中央寄せ） */
+	max-width: 980px;
 	margin-left: auto;
 	margin-right: auto;
+	padding: clamp(10px, 3vw, 28px);
+	box-sizing: border-box;
+}
+
+/* 小画面で更に余白をコンパクトにして表示領域を確保 */
+@media (max-width: 420px) {
+	.main, .wrapper, #login-main {
+		padding: 10px;
+	}
 }
 
 /* ヘッダ／タイトル */
