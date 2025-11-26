@@ -11,38 +11,51 @@
 	--serif: "Hiragino Mincho ProN", "Yu Mincho", "Times New Roman", serif;
 }
 
-/* 全体 */
-html, body {
-	height: 100%;
-	margin: 0;
-	background: var(--bg);
-	color: var(--fg);
-	font-family: var(--serif);
-	text-align: center; /* 中央ぞろえ */
-	box-sizing: border-box;
-
-	/* 追加: 全ページを中央寄せするための簡易レイアウト */
-	display: flex;
-	flex-direction: column;
-	align-items: center;      /* 横方向中央 */
-	justify-content: flex-start; /* 縦方向は上寄せ（必要なら center に変更） */
-	min-height: 100vh;
+/* login 共通レイアウト（既存スタイルを壊さない最小追加） */
+:root {
+	--login-max-width: 980px;
+	--login-padding-sm: 10px;
+	--login-padding-lg: 28px;
+	--serif: "Hiragino Mincho ProN", "Yu Mincho", "Times New Roman", serif;
 }
 
-/* 中央ラッパー（ファイル内の既存 `.main` / `.wrapper` などに合わせて調整） */
+/* ページ全体を横方向中央に揃える（縦は上寄せ） */
+html, body {
+	/* 既存のスタイルがあれば上書きしないよう必要最小限 */
+	min-height: 100vh;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;      /* 横方向中央揃え */
+	justify-content: flex-start; /* 縦方向は上寄せ（必要なら center に変更） */
+	text-align: center;
+	font-family: var(--serif);
+	box-sizing: border-box;
+	/* 追加: ベースフォントを少し大きく */
+	font-size: 18px;
+	line-height: 1.6;
+}
+
+/* 中央ラッパー：.main / .wrapper / #login-main に対応 */
 .main, .wrapper, #login-main {
 	width: 100%;
-	max-width: 980px;
+	max-width: var(--login-max-width);
 	margin-left: auto;
 	margin-right: auto;
-	padding: clamp(10px, 3vw, 28px);
+	padding: clamp(var(--login-padding-sm), 3vw, var(--login-padding-lg));
 	box-sizing: border-box;
+	/* 追加: 子要素も中央寄せにする（フォーム等も中央揃え） */
+	text-align: center;
 }
 
 /* 小画面で更に余白をコンパクトにして表示領域を確保 */
 @media (max-width: 420px) {
 	.main, .wrapper, #login-main {
 		padding: 10px;
+	}
+	/* 小画面での文字サイズ調整 */
+	.main label, .main input, .main select, .main button {
+		font-size: 1rem;
 	}
 }
 

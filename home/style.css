@@ -27,6 +27,10 @@ html, body {
 	align-items: center; /* 横方向中央 */
 	justify-content: flex-start; /* 縦方向は上寄せ（必要なら center に） */
 	min-height: 100vh;
+
+	/* 追加: ベースフォントサイズと行間をやや大きくして可読性向上 */
+	font-size: 18px;
+	line-height: 1.6;
 }
 
 /* 中央のラッパー（スマホもPCもいい感じに） */
@@ -46,7 +50,7 @@ html, body {
 /* ヘッダ／タイトル */
 h1.tytle {
 	margin: 0 0 12px;
-	font-size: clamp(1.4rem, 3.2vw, 2.2rem);
+	font-size: clamp(1.6rem, 4.0vw, 2.6rem);
 	line-height: 1.2;
 	text-align: center;
 }
@@ -55,7 +59,7 @@ h1.tytle {
 label, .selected, #status-message {
 	display: block;
 	margin: 8px 0;
-	font-size: clamp(0.95rem, 1.8vw, 1.1rem);
+	font-size: clamp(1.0rem, 2.0vw, 1.2rem);
 	color: var(--muted);
 	text-align: center;
 }
