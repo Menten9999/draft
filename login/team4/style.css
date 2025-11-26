@@ -1,0 +1,173 @@
+:root {
+	--max-width: 980px;
+	--gap: 16px;
+	--padding-xs: 12px;
+	--padding-sm: 2vw;
+	--padding-lg: 28px;
+	--bg: #ffffff;
+	--fg: #222;
+	--muted: #666;
+	--accent: #007bff;
+	--serif: "Hiragino Mincho ProN", "Yu Mincho", "Times New Roman", serif;
+}
+
+/* 全体 */
+html, body {
+	min-height: 100vh;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-start;
+	text-align: center;
+	box-sizing: border-box;
+	font-size: 18px;
+	line-height: 1.6;
+	font-family: "Hiragino Mincho ProN", "Yu Mincho", "Times New Roman", serif;
+}
+
+/* 中央のラッパー（スマホもPCもいい感じに） */
+.main {
+	width: 100%;
+	max-width: var(--max-width);
+	margin: 24px auto;
+	padding: clamp(var(--padding-xs), var(--padding-sm), var(--padding-lg));
+	box-sizing: border-box;
+	display: block;
+
+	/* 追加: 横中央揃えを確実にする（flex 親下で中央寄せ） */
+	margin-left: auto;
+	margin-right: auto;
+}
+
+/* ヘッダ／タイトル */
+h1.tytle {
+	margin: 0 0 12px;
+	font-size: clamp(1.6rem, 4.0vw, 2.6rem);
+	line-height: 1.2;
+	text-align: center;
+}
+
+/* ラベルやステータスは中央だが要素内は左寄せにする場合あり */
+label, .selected, #status-message {
+	display: block;
+	margin: 8px 0;
+	font-size: clamp(1.0rem, 2.0vw, 1.2rem);
+	color: var(--muted);
+	text-align: center;
+}
+
+/* 選択肢・ボタン類 */
+select, input[type="button"], button {
+	font-family: var(--serif);
+	font-size: clamp(0.95rem, 1.8vw, 1.05rem);
+	padding: 10px 20px;
+	border-radius: 8px;
+	border: 1px solid #ccc;
+	background: #fff;
+	color: var(--fg);
+	box-sizing: border-box;
+	cursor: pointer;
+}
+
+/* 確定 / 辞退 ボタンの色調整 */
+#confirm-btn {
+	background: var(--accent);
+	color: #fff;
+	border: none;
+}
+.pass-button {
+	background: #6c757d;
+	color: #fff;
+	border: none;
+}
+
+/* 全チームの獲得選手一覧はコンテナ中央、リストは左寄せで読みやすく */
+.all-teams-status {
+	margin-top: 20px;
+	padding-top: 20px;
+	border-top: 1px solid #eee;
+	text-align: center;
+}
+.all-teams-status ul {
+	list-style: none;
+	padding: 0;
+	margin: 0 auto;
+	display: inline-block; /* 中央寄せしつつ中身は左揃え */
+	text-align: left;
+	max-width: 100%;
+}
+
+/* 抽選ボタンなどのカード系 */
+#lottery-box { display: flex; flex-wrap: wrap; gap: var(--gap); justify-content: center; padding: 20px; }
+.lot-button {
+	width: 150px;
+	height: 100px;
+	font-size: clamp(1.1rem, 2.6vw, 1.5rem);
+	cursor: pointer;
+	border-radius: 10px;
+	border: 2px solid #fff;
+	background-color: #495057;
+	color: #fff;
+}
+
+/* オーバーレイ類の余白調整 */
+#system-alert-overlay, #waiting-overlay, #lottery-overlay, #result-overlay {
+	padding: clamp(12px, 4vw, 40px);
+	box-sizing: border-box;
+}
+
+/* 大画面向け微調整 */
+@media (min-width: 1024px) {
+	body { align-items: flex-start; }
+	.main { margin-top: 40px; }
+	.lot-button { width: 180px; height: 110px; }
+	select, input[type="button"], button { padding: 12px 26px; }
+}
+
+/* 小画面向け微調整 */
+@media (max-width: 420px) {
+	.lot-button { width: 140px; height: 96px; }
+	#confirm-btn, .pass-button { padding: 10px 18px; font-size: 1rem; }
+
+	/* 追加: スマホでの余白をコンパクトにして表示領域を広げる */
+	.main {
+		padding: 10px;
+	}
+}
+
+html, body {
+	min-height: 100vh;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: flex-start;
+	text-align: center;
+	box-sizing: border-box;
+	font-size: 18px;
+	line-height: 1.6;
+	font-family: "Hiragino Mincho ProN", "Yu Mincho", "Times New Roman", serif;
+}
+
+.main, .wrapper, #login-main {
+	width: 100%;
+	max-width: 980px;
+	margin-left: auto;
+	margin-right: auto;
+	padding: clamp(10px, 3vw, 28px);
+	box-sizing: border-box;
+	text-align: center;
+}
+
+.main input, .main select, .main button,
+.wrapper input, .wrapper select, .wrapper button,
+#login-main input, #login-main select, #login-main button {
+	font-size: clamp(1.0rem, 2.2vw, 1.15rem);
+	padding: clamp(10px, 2.2vw, 14px);
+	text-align: center;
+}
+
+@media (max-width: 420px) {
+	.main, .wrapper, #login-main { padding: 8px; }
+}
