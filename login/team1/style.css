@@ -10,7 +10,9 @@
 	--accent: #007bff;
 	--serif: "Hiragino Mincho ProN", "Yu Mincho", "Times New Roman", serif;
 }
-
+.teamname{
+    font-size: clamp(1.6rem, 4.0vw, 2.6rem);
+}
 /* 全体 */
 html, body {
 	min-height: 100vh;
@@ -62,7 +64,6 @@ select, input[type="button"], button {
 	font-family: var(--serif);
 	font-size: clamp(0.95rem, 1.8vw, 1.05rem);
 	padding: 10px 20px;
-	border-radius: 8px;
 	border: 1px solid #ccc;
 	background: #fff;
 	color: var(--fg);
