@@ -16,7 +16,7 @@
         .pass-button:hover { background-color: #5a6268; }
         /* ボタン：縦は少し小さく、横は広くして押しやすく */
         #confirm-btn, .pass-button {
-            padding: 8px 28px; /* 上下 8px / 左右 28px */
+            padding: 8px 28px;
             font-size: 1.05rem;
             min-height: 40px;
             border-radius: 6px;
@@ -84,7 +84,7 @@
     <div class="envelope" onclick="openEnvelope()">
         <div class="envelope-flap"></div>
         <div class="result-image-container">
-            <img id="result-image" src="">
+            <img id="result-image" src="" alt="抽選結果">
         </div>
     </div>
 </div>
@@ -109,45 +109,49 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
 <script src="../../firebase-config.js"></script>
 <script>
-    // firebaseConfig の存在をチェックして安全に初期化
     if (typeof firebaseConfig === 'undefined') {
-        console.error('firebaseConfig is not defined (team1). Check draft\\firebase-config.js');
+        console.error('firebaseConfig is not defined (team3). Check draft\\firebase-config.js');
         document.getElementById('status-message').textContent = 'エラー: Firebase 設定がありません。管理者に確認してください。';
-        // Disable controls to avoid further errors
         document.querySelectorAll('input, select, button').forEach(el => el.disabled = true);
     } else {
         if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     }
     const database = firebase.database();
     const teamId = 'team1';
-    // 全ページで使う獲得選手リストのグローバル保持
     let acquiredPlayersListGlobal = [];
-    // 初期値（フォールバック）
     let teams = ['team1', 'team2', 'team3', 'team4'];
-    let teamNames = {}; // id->表示名
+    let teamNames = {};
     let allPlayers = ["仙田", "新井", "上坂", "田中", "鵜飼", "布目", "冨高", "大寺"];
-
-    // draftConfig を監視して設定を反映（admin/setup.html で保存される）
     const configRef = database.ref('draftConfig');
     const waiverRef = database.ref('draftConfig/waiverOrder');
     let waiverEnabled = false;
     configRef.on('value', (snap) => {
         const cfg = snap.val() || {};
+        console.log('draftConfig for team3:', cfg);
         if (Array.isArray(cfg.teams)) {
             teams = cfg.teams.map(t => t.id);
-            teamNames = {}; cfg.teams.forEach((t,i)=> teamNames[t.id]=t.name || `チーム${i+1}`);
+            teamNames = {};
+            cfg.teams.forEach((t, i) => { teamNames[t.id] = t.name || `チーム${i+1}`; });
         }
-        if (cfg && Array.isArray(cfg.candidates)) {
+        if (Array.isArray(cfg.candidates)) {
             allPlayers = cfg.candidates.slice();
         }
-        // ウェイバー方式の有無を保持
+        updatePlayerOptions(acquiredPlayersListGlobal || []);
         waiverEnabled = !!cfg.waiverEnabled;
-        // UI 更新（acquiredPlayers の表示や選択肢）
-        updatePlayerOptions(acquiredPlayersListGlobal);
+        const waiverEl = document.getElementById('waiver-order');
+        if (waiverEl) {
+            waiverEl.innerHTML = '';
+            (cfg.waiverOrder || []).forEach(id => {
+                const li = document.createElement('li');
+                li.textContent = teamNames[id] || id;
+                waiverEl.appendChild(li);
+            });
+        }
     });
-    // ログを追加して設定が届いているか確認
-    configRef.on('value', (snap) => {
-        console.log('draftConfig for team1:', snap.val());
+    // acquiredPlayers の受信ログ（宣言後に配置）
+    const acquiredPlayersRef = database.ref('acquiredPlayers');
+    acquiredPlayersRef.on('value', (snapshot) => {
+        console.log('acquiredPlayers for team3 updated:', snapshot.val());
     });
 
     const roundRef = database.ref('round');
@@ -156,7 +160,6 @@
     const systemAlertRef = database.ref('systemAlert');
     const processingRef = database.ref('processing');
     const confirmedRef = database.ref('selectionConfirmed/' + teamId);
-    const acquiredPlayersRef = database.ref('acquiredPlayers');
     const passedRef = database.ref('teamsPassed/' + teamId);
     const lotteryRef = database.ref('lotteries');
 
@@ -175,7 +178,6 @@
         for (const player in lotteries) {
             const lotteryData = lotteries[player];
             if (lotteryData.competingTeams && lotteryData.competingTeams[teamId]) {
-                // myPick をここで一度だけ定義（存在判定は typeof で）
                 const myPick = (lotteryData.picks && Object.prototype.hasOwnProperty.call(lotteryData.picks, teamId))
                     ? lotteryData.picks[teamId] : undefined;
                 isMyLottery = true;
@@ -191,12 +193,10 @@
                         } else {
                             resultImage.src = '';
                         }
-                        // 表示のみ（自動開封は行わない）。ユーザーのタップで openEnvelope() を呼ぶ
                         resultOverlay.style.display = 'flex';
                         const envelope = resultOverlay.querySelector('.envelope');
                         envelope.classList.remove('opened');
-                        envelope.style.pointerEvents = ''; // クリック可能に
-                        // ヒントを表示（落選時は再選択を促す）
+                        envelope.style.pointerEvents = '';
                         const hint = document.getElementById('status-message');
                         const hintText = (message && message.includes('落選')) ? '再度選手を選択してください' : '封筒をタップして結果を開封してください。';
                         if (hint) hint.textContent = hintText;
@@ -204,43 +204,44 @@
                     lotteryOverlay.style.display = 'none';
                     return;
                 }
-
-                // player はキーとして encodeURIComponent されている可能性があるため表示用にデコードする
+                
+                document.getElementById('lottery-player-name').textContent = `「${player}」選手の抽選`;
                 let displayPlayer = player;
-                try { displayPlayer = decodeURIComponent(player); } catch (e) { /* keep original if decode fails */ }
-
+                try { displayPlayer = decodeURIComponent(player); } catch (e) { }
                 document.getElementById('lottery-player-name').textContent = `「${displayPlayer}」選手の抽選`;
                 
                 const turnIndex = lotteryData.turnIndex || 0;
                 const turnInfo = document.getElementById('lottery-turn-info');
                 
-                if (turnIndex >= (lotteryData.pickOrder || []).length) {
+                // pickOrder が未定義の場合に備えてガードを入れる
+                const pickOrder = lotteryData.pickOrder || [];
+                if (turnIndex >= pickOrder.length) {
                     turnInfo.textContent = '全員の選択が完了しました。開票をお待ちください。';
                 } else {
-                    const currentTurnTeamId = (lotteryData.pickOrder || [])[turnIndex];
+                    const currentTurnTeamId = pickOrder[turnIndex];
                     const currentTurnTeamName = teamNames[currentTurnTeamId] || `チーム${teams.indexOf(currentTurnTeamId) + 1}`;
                     turnInfo.textContent = `次は ${currentTurnTeamName} の番です。`;
                 }
-
+ 
                 const myTurn = (lotteryData.pickOrder || [])[turnIndex] === teamId;
                 const lotteryBox = document.getElementById('lottery-box');
                 lotteryBox.innerHTML = '';
-                // myPick は上で定義したものを利用（再宣言しない）
-                lotteryData.lots.forEach(lot => {
-                    const button = document.createElement('button');
-                    button.className = 'lot-button';
-                    button.textContent = `くじ ${lot.id + 1}`;
-                    button.onclick = () => drawLot(player, lot.id);
-                    // 未定義かどうかは typeof で判定（0 や null を誤判定しない）
-                    if (!myTurn || lot.isPicked || typeof myPick !== "undefined") {
-                        button.disabled = true;
-                    }
-                    lotteryBox.appendChild(button);
-                });
-                lotteryOverlay.style.display = 'flex';
-                break;
-            }
-        }
+                // myPick は上で定義済みを利用
+                // lots が未定義の場合に備えてガードを入れる
+                (lotteryData.lots || []).forEach(lot => {
+                     const button = document.createElement('button');
+                     button.className = 'lot-button';
+                     button.textContent = `くじ ${lot.id + 1}`;
+                     button.onclick = () => drawLot(player, lot.id);
+                     if (!myTurn || lot.isPicked || typeof myPick !== "undefined") {
+                         button.disabled = true;
+                     }
+                     lotteryBox.appendChild(button);
+                 });
+                 lotteryOverlay.style.display = 'flex';
+                 break;
+             }
+         }
         if (!isMyLottery) {
             lotteryOverlay.style.display = 'none';
         }
@@ -250,14 +251,21 @@
         const message = snapshot.val();
         const hintEl = document.getElementById('status-message');
         const resultImage = document.getElementById('result-image');
-        if (!message) {
-            if (hintEl) hintEl.textContent = '';
-            return;
-        }
+        if (!message) { if (hintEl) hintEl.textContent = ''; return; }
         if (message === "交渉権獲得") {
             resultImage.src = 'atari.png';
+            if (waiverEnabled) {
+                waiverRef.transaction(current => {
+                    if (!Array.isArray(current)) return current;
+                    const idx = current.indexOf(teamId);
+                    if (idx !== -1) {
+                        current.splice(idx, 1);
+                        current.push(teamId);
+                    }
+                    return current;
+                }).catch(()=>{});
+            }
             if (hintEl) hintEl.textContent = '';
-            // ウェイバー処理...
         } else if (message.includes("落選")) {
             resultImage.src = 'hazure.png';
             if (hintEl) hintEl.textContent = '再度選手を選択してください';
@@ -292,7 +300,6 @@
                         statusRef.remove().catch(()=>{});
                         envelope.classList.remove('opened');
                         envelope.style.pointerEvents = '';
-                        // ヒントを消去
                         const hint = document.getElementById('status-message');
                         if (hint) hint.textContent = '';
                     }, 30000);
@@ -353,12 +360,11 @@
             listElement.appendChild(li);
             flat.push(...cleaned);
         });
-        // 全体は一意化して保持（重複表示を防止）
         const unique = Array.from(new Set(flat));
         acquiredPlayersListGlobal = unique;
         updatePlayerOptions(unique);
     });
-
+    
     function updatePlayerOptions(acquiredPlayersList) {
         const selectElement = document.getElementById('pet-select');
         const currentSelectedValue = selectElement.value;
@@ -371,7 +377,6 @@
             option.textContent = player;
             selectElement.appendChild(option);
         });
-        // 現在選択が利用不可になっていれば空にする
         selectElement.value = taken.has((currentSelectedValue||'').toString().trim()) ? '' : currentSelectedValue;
     }
 
@@ -390,14 +395,12 @@
         const confirmBtn = document.getElementById('confirm-btn');
 
         if (!selectedPlayer) {
-            // 未選択なら通常状態
             selectEl.disabled = false;
             confirmBtn.disabled = false;
             document.getElementById('status-message').textContent = '';
             return;
         }
 
-        // 選択済：ステータスと lotteries を参照して「落選」かどうかを判定する。
         Promise.all([
             statusRef.once('value'),
             (async () => {
@@ -410,13 +413,11 @@
         ]).then(([statusSnap, lotteryData]) => {
             const msg = (statusSnap.val() || '').toString();
             const isLoser = msg && msg.includes('落選');
-            // ロック条件: 落選でない限りロック（くじ進行中や未判定も含む）
             const locked = !isLoser;
             selectEl.disabled = locked;
             confirmBtn.disabled = locked;
             document.getElementById('status-message').textContent = isLoser ? '' : '※ 選択済みのため、この巡では変更できません。';
         }).catch(()=> {
-            // エラー時は保守的にロック
             selectEl.disabled = true;
             confirmBtn.disabled = true;
             document.getElementById('status-message').textContent = '※ 選択済みのため、この巡では変更できません。';
@@ -434,7 +435,6 @@
         }
     });
 
-    // processing フラグ監視：管理者が処理中の間は選択操作をロックして待機表示
     processingRef.on('value', (snap) => {
         const working = !!snap.val();
         const selectEl = document.getElementById('pet-select');
