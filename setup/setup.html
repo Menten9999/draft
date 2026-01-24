@@ -34,6 +34,7 @@
 			<button type="button" id="save-btn">保存して初期化</button>
 			<button type="button" id="finish-btn">設定を終了</button> <!-- 追加 -->
 			<button type="button" id="clear-btn">draftConfig を削除</button>
+			<button type="button" id="reset-btn" style="background-color: #dc3545; color:#fff; border:none; padding:6px 10px; border-radius:4px;">ドラフトをリセット</button>
 		</div>
 		<p id="status"></p>
 		<p class="small">注意: firebase-config.js への相対パスは環境に合わせて調整してください。</p>
@@ -64,6 +65,7 @@
 		const $save = document.getElementById('save-btn');
 		const $finish = document.getElementById('finish-btn');
 		const $clear = document.getElementById('clear-btn');
+		const $reset = document.getElementById('reset-btn');
 		const $status = document.getElementById('status');
 
 		// 保存処理を関数化。redirect=true なら保存後に管理画面へ遷移する
@@ -155,6 +157,19 @@
 			} catch (e) {
 				console.error(e);
 				$status.textContent = '削除に失敗しました。';
+			}
+		});
+
+		// reset all (destructive)
+		$reset.addEventListener('click', async ()=>{
+			const ok = prompt('警告: 全データを削除します。 delete と入力して実行してください');
+			if (ok !== 'delete') { if (ok !== null) alert('入力が間違っています'); return; }
+			try {
+				await db.ref().set(null);
+				await db.ref('round').set(1);
+				alert('ドラフトデータを初期化しました。');
+			} catch (e) {
+				console.error(e); alert('リセットに失敗しました。');
 			}
 		});
 
