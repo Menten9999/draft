@@ -296,6 +296,8 @@
                 if (e.target && e.target.id === 'result-image') {
                     // 30秒間は結果を表示する
                     setTimeout(() => {
+    // ここでstatusRefを削除
+    statusRef.remove().catch(()=>{});
                         document.getElementById('result-overlay').style.display = 'none';
                         statusRef.remove().catch(()=>{});
                         envelope.classList.remove('opened');
