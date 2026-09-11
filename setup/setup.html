@@ -175,11 +175,19 @@
 
 		// ページ読み込み時に既存設定を反映する場合の処理（あれば）：
 		(async () => {
-			const snap = await db.ref('draftConfig').once('value');
-			const cfg = snap.val() || {};
-			if (cfg.waiverEnabled) {
-				const cb = document.getElementById('waiver-checkbox');
-				if (cb) cb.checked = true;
+			try {
+				const snap = await db.ref('draftConfig').once('value');
+				const cfg = snap.val() || {};
+				if (cfg.waiverEnabled) {
+					const cb = document.getElementById('waiver-checkbox');
+					if (cb) cb.checked = true;
+				}
+			} catch (e) {
+				console.warn('draftConfig is not readable yet or access is denied.', e);
+				$stateStatus = $status;
+				if ($status) {
+					$status.textContent = '既存設定の読み込みが許可されていません。新しく保存して初期化できます。';
+				}
 			}
 		})();
 	</script>

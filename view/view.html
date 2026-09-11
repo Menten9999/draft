@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>ドラフト発表 スライド (閲覧用)</title>
+  <style>
+    body, html {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: #000; font-family: 'Hiragino Mincho ProN', 'Yu Mincho', serif;
+      overflow: hidden; user-select: none;
+    }
+    #slide-container {
+      width: 100vw; height: 100vh;
+      display: flex; align-items: center; justify-content: center;
+      position: relative; background: #000;
+    }
+    .slide {
+      position: absolute; width: 100%; height: 100%;
+      opacity: 0; transition: opacity 1.2s ease;
+      pointer-events: none;
+    }
+    .slide.active { opacity: 1; pointer-events: auto; }
+    
+    /* 1枚目：チームロゴ全面スライド */
+    .team-logo-slide {
+      width: 100%; height: 100%; background-size: contain; 
+      background-position: center; background-repeat: no-repeat; background-color: #000;
+    }
+
+    /* 2枚目：選手指名スライド */
+    .player-slide {
+      background: #fff; color: #000; width: 100%; height: 100%;
+      position: relative; display: flex; flex-direction: column; justify-content: center;
+    }
+    .ps-header { position: absolute; top: 0; left: 0; display: flex; align-items: center; }
+    .ps-header-logo { height: 18vh; object-fit: contain; }
+    .ps-header-team { font-size: 4vh; margin-left: 30px; letter-spacing: 0.1em; font-family: sans-serif;}
+    .ps-player-name { font-size: 15vw; font-weight: bold; text-align: center; letter-spacing: 0.2em; margin-left: 0.2em; font-family: sans-serif;}
+    .ps-footer { position: absolute; bottom: 10%; left: 8%; font-size: 4vw; line-height: 1.5; color: #333; font-family: sans-serif;}
+
+    /* 3枚目：全体一覧（サマリー）スライド */
+    .summary-slide {
+      width: 100%; height: 100%; background: #fff; color: #000;
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+      padding-top: 2vh; box-sizing: border-box;
+    }
+    .summary-title { font-size: 4.5vh; margin-bottom: 2vh; letter-spacing: 0.05em; }
+    .summary-grid {
+      display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr;
+      gap: 1.5vw; width: 96vw; height: 85vh;
+    }
+    .grid-cell {
+      position: relative; display: flex; flex-direction: column; 
+      box-sizing: border-box; background: #fff;
+    }
+    .grid-cell.unrevealed {
+      background-size: contain; background-position: center; background-repeat: no-repeat;
+    }
+    .cell-header { display: flex; align-items: center; height: 15%; margin-bottom: 3%; }
+    .cell-logo { height: 100%; object-fit: contain; margin-right: 1vw; }
+    .cell-team-name { font-size: 2.5vh; font-family: sans-serif;}
+    .cell-player-name { font-size: 9vh; font-weight: bold; letter-spacing: 0.2em; text-align: center; margin-bottom: auto; font-family: sans-serif;}
+    .cell-footer { font-size: 2.5vh; color: #333; line-height: 1.4; font-family: sans-serif;}
+  </style>
+</head>
+<body>
+
+  <div id="slide-container">
+    <div class="slide active" style="display:flex; align-items:center; justify-content:center; color:#fff;">
+      <h1 style="font-family: sans-serif;">選択中<br>Voting in Progress</h1>
+      
+    </div>
+    
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="../firebase-config.js"></script>
+  
+  <script>
+    if (typeof firebase === 'undefined' || !firebase.apps) {
+      console.error('Firebase SDK is not initialized.');
+      throw new Error('Firebase SDK is not initialized.');
+    }
+    if (!firebase.apps || !firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+
+    let slidesData = [];
+    let currentIndex = 0;
+    let teamsData = {};
+    let picksData = {};
+    const db = firebase.database();
+
+    db.ref('teams').on('value', (snap) => {
+      teamsData = snap.val() || {};
+      buildSlides();
+    });
+
+    db.ref('draft_picks').on('value', (snap) => {
+      picksData = snap.val() || {};
+      buildSlides();
+    });
+
+    db.ref('presentation/currentIndex').on('value', (snap) => {
+      const index = snap.val();
+      currentIndex = index !== null ? index : 0;
+      renderSlide();
+    });
+
+    function buildSlides() {
+      const teams = Object.keys(teamsData).map(key => ({ id: key, ...teamsData[key] })).sort((a, b) => parseInt(a.id) - parseInt(b.id));
+      const titleText = 'ピンポン野球サークル2025年度冬合宿ドラフト会議';
+      
+      const newSlides = [];
+      newSlides.push({ html: '<div style="width:100%; height:100%; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#000;"><h1 style="font-size: 6vw;">' + titleText + '</h1><p style="font-size:3vw; color:#666;">まもなく発表を開始します</p></div>' });
+
+      teams.forEach((team, index) => {
+        const pick = picksData[team.id];
+        if (pick && pick.status !== 'selecting') {
+          const logoPath = `../assets/logo_${team.id}.jpg`;
+          
+          // 1. チームロゴスライド
+          newSlides.push({ html: `<div class="team-logo-slide" style="background-image: url('${logoPath}');"></div>` });
+          
+          // 2. 選手発表スライド
+          newSlides.push({
+            html: `
+              <div class="player-slide">
+                <div class="ps-header">
+                  <img src="${logoPath}" class="ps-header-logo" onerror="this.style.display='none'">
+                  <div class="ps-header-team">${team.name || '未設定'}</div>
+                </div>
+                <div class="ps-player-name">${pick.playerName || '未入力'}</div>
+                <div class="ps-footer">
+                  <div>${pick.position || ''}</div>
+                  <div>${pick.school || ''}</div>
+                </div>
+              </div>
+            `
+          });
+
+          // 3. 一覧（サマリー）スライドの生成
+          let gridHtml = `<div class="summary-slide"><div class="summary-title">${titleText}</div><div class="summary-grid">`;
+          
+          teams.forEach((t, tIndex) => {
+            const tPick = picksData[t.id] || {};
+            const tLogoPath = `../assets/logo_${t.id}.jpg`;
+
+            if (tIndex <= index) {
+              // 発表済み：選手情報を表示
+              gridHtml += `
+                <div class="grid-cell">
+                  <div class="cell-header">
+                    <img src="${tLogoPath}" class="cell-logo" onerror="this.style.display='none'">
+                    <div class="cell-team-name">${t.name || '未設定'}</div>
+                  </div>
+                  <div class="cell-player-name">${tPick.playerName || '未入力'}</div>
+                  <div class="cell-footer">
+                    <div>${tPick.position || ''}</div>
+                    <div>${tPick.school || ''}</div>
+                  </div>
+                </div>
+              `;
+            } else {
+              // 未発表：ロゴのみ表示
+              gridHtml += `<div class="grid-cell unrevealed" style="background-image: url('${tLogoPath}');"></div>`;
+            }
+          });
+          gridHtml += `</div></div>`;
+          newSlides.push({ html: gridHtml });
+        }
+      });
+      
+      newSlides.push({ html: '<div style="width:100%; height:100%; background:#fff; display:flex; align-items:center; justify-content:center;"><h1 style="font-size: 5vw; color: #333;">第一巡 選択希望選手<br>発表終了</h1></div>' });
+
+      slidesData = newSlides;
+      if (currentIndex >= slidesData.length) currentIndex = slidesData.length - 1;
+      if (currentIndex < 0) currentIndex = 0;
+      
+      renderSlide();
+    }
+
+    function renderSlide() {
+      if (slidesData.length === 0) return;
+      const container = document.getElementById('slide-container');
+      const currentSlideHtml = slidesData[currentIndex].html;
+      const oldSlide = container.querySelector('.slide.active');
+      
+      if (oldSlide && oldSlide.innerHTML === currentSlideHtml) return;
+      if (oldSlide) oldSlide.classList.remove('active');
+
+      const newSlide = document.createElement('div');
+      newSlide.className = 'slide';
+      newSlide.innerHTML = currentSlideHtml;
+      container.appendChild(newSlide);
+      
+      setTimeout(() => {
+        newSlide.classList.add('active');
+        if(oldSlide) setTimeout(() => oldSlide.remove(), 1200);
+      }, 50);
+    }
+  </script>
+</body>
+</html>
