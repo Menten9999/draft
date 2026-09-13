@@ -96,27 +96,26 @@
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
   <script src="../firebase-config.js"></script>
   
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <script src="../firebase-config.js"></script>
+  
   <script>
-    if (typeof firebaseConfig === 'undefined') {
-      console.error('firebaseConfig is not defined. Please load ../firebase-config.js');
-      throw new Error('Firebase config is missing.');
-    }
-    if (!firebase.apps || !firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-
     let slidesData = [];
     let currentIndex = 0;
-    let teamsData = {};
+    let teamsData = [];
     let picksData = {};
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
     const db = firebase.database();
 
-    db.ref('teams').on('value', (snap) => {
-      teamsData = snap.val() || {};
+    db.ref('draftConfig/teams').on('value', (snap) => {
+      teamsData = snap.val() || [];
       buildSlides();
     });
 
-    db.ref('draft_picks').on('value', (snap) => {
+    db.ref('presentation/confirmed_picks').on('value', (snap) => {
       picksData = snap.val() || {};
       buildSlides();
     });
@@ -125,19 +124,43 @@
       const index = snap.val();
       currentIndex = index !== null ? index : 0;
       renderSlide();
-      updateStatusText();
+      if (typeof updateStatusText === 'function') updateStatusText();
     });
 
     function buildSlides() {
-      const teams = Object.keys(teamsData).map(key => ({ id: key, ...teamsData[key] })).sort((a, b) => parseInt(a.id) - parseInt(b.id));
-      const titleText = 'ピンポン野球サークル2025年度冬合宿ドラフト会議';
-      
-      const newSlides = [];
-      newSlides.push({ html: '<div style="width:100%; height:100%; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#000;"><h1 style="font-size: 6vw;">' + titleText + '</h1><p style="font-size:3vw; color:#666;">（管理者プレビュー画面）</p></div>' });
+      // チーム情報が取得できていればそれを使用、なければ指名データのキーから自動推測する
+      let teams = [];
+      if (Array.isArray(teamsData) && teamsData.length > 0) {
+        teams = teamsData;
+      } else {
+        const keys = Object.keys(picksData).sort();
+        if (keys.length > 0) {
+          keys.forEach(k => teams.push({ id: k, name: `チーム ${k}` }));
+        } else {
+          teams = [
+            { id: "1", name: "橋本チーム" }, { id: "2", name: "西村チーム" },
+            { id: "3", name: "チーム3" }, { id: "4", name: "チーム4" }
+          ];
+        }
+      }
 
+      const titleText = 'ピンポン野球サークル2025年度冬合宿ドラフト会議';
+      const newSlides = [];
+      
+      newSlides.push({ html: '<div style="width:100%; height:100%; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#000;"><h1 style="font-size: 6vw;">' + titleText + '</h1><p style="font-size:3vw; color:#666;">まもなく発表を開始します</p></div>' });
+
+      // 指名データが存在するチームだけを抽出してスライド作成
       teams.forEach((team, index) => {
-        const pick = picksData[team.id];
-        if (pick && pick.status !== 'selecting') {
+        // IDの型違い（数値の1と文字列の"1"など）を吸収してデータを取得
+        const pickKey = Object.keys(picksData).find(k => k == team.id);
+        const rawPick = pickKey ? picksData[pickKey] : null;
+        
+        if (rawPick) {
+          // 元システムのデータは単なる文字列（選手名）で送られてくるため、文字列として処理する
+          const playerName = typeof rawPick === 'string' ? rawPick : (rawPick.playerName || '未入力');
+          const position = typeof rawPick === 'object' ? (rawPick.position || '') : '';
+          const school = typeof rawPick === 'object' ? (rawPick.school || '') : '';
+
           const logoPath = `../assets/logo_${team.id}.jpg`;
           
           newSlides.push({ html: `<div class="team-logo-slide" style="background-image: url('${logoPath}');"></div>` });
@@ -149,31 +172,37 @@
                   <img src="${logoPath}" class="ps-header-logo" onerror="this.style.display='none'">
                   <div class="ps-header-team">${team.name || '未設定'}</div>
                 </div>
-                <div class="ps-player-name">${pick.playerName || '未入力'}</div>
+                <div class="ps-player-name">${playerName}</div>
                 <div class="ps-footer">
-                  <div>${pick.position || ''}</div>
-                  <div>${pick.school || ''}</div>
+                  <div>${position}</div>
+                  <div>${school}</div>
                 </div>
               </div>
             `
           });
 
+          // サマリー（一覧）スライドの構築
           let gridHtml = `<div class="summary-slide"><div class="summary-title">${titleText}</div><div class="summary-grid">`;
           teams.forEach((t, tIndex) => {
-            const tPick = picksData[t.id] || {};
+            const tPickKey = Object.keys(picksData).find(k => k == t.id);
+            const tRawPick = tPickKey ? picksData[tPickKey] : null;
             const tLogoPath = `../assets/logo_${t.id}.jpg`;
 
-            if (tIndex <= index) {
+            if (tIndex <= index && tRawPick) {
+              const tPlayerName = typeof tRawPick === 'string' ? tRawPick : (tRawPick.playerName || '未入力');
+              const tPosition = typeof tRawPick === 'object' ? (tRawPick.position || '') : '';
+              const tSchool = typeof tRawPick === 'object' ? (tRawPick.school || '') : '';
+
               gridHtml += `
                 <div class="grid-cell">
                   <div class="cell-header">
                     <img src="${tLogoPath}" class="cell-logo" onerror="this.style.display='none'">
                     <div class="cell-team-name">${t.name || '未設定'}</div>
                   </div>
-                  <div class="cell-player-name">${tPick.playerName || '未入力'}</div>
+                  <div class="cell-player-name">${tPlayerName}</div>
                   <div class="cell-footer">
-                    <div>${tPick.position || ''}</div>
-                    <div>${tPick.school || ''}</div>
+                    <div>${tPosition}</div>
+                    <div>${tSchool}</div>
                   </div>
                 </div>
               `;
@@ -193,7 +222,7 @@
       if (currentIndex < 0) currentIndex = 0;
       
       renderSlide();
-      updateStatusText();
+      if (typeof updateStatusText === 'function') updateStatusText();
     }
 
     function renderSlide() {
@@ -216,8 +245,10 @@
       }, 50);
     }
 
+    // 管理者用の操作機能（view画面では無視されます）
     function updateStatusText() {
-      document.getElementById('status-text').innerText = `スライド: ${currentIndex + 1} / ${slidesData.length}`;
+      const el = document.getElementById('status-text');
+      if(el) el.innerText = `スライド: ${currentIndex + 1} / ${slidesData.length}`;
     }
 
     function changeSlide(direction) {
@@ -227,14 +258,18 @@
       }
     }
 
-    function resetSlide() {
-      db.ref('presentation').update({ currentIndex: 0 });
+function changeSlide(direction) {
+      const nextIndex = currentIndex + direction;
+      if (nextIndex >= 0 && nextIndex < slidesData.length) {
+        // 変更点: update ではなく特定のパスへ直接 set する
+        db.ref('presentation/currentIndex').set(nextIndex);
+      }
     }
 
-    window.addEventListener('keydown', (e) => {
-      if(e.key === 'ArrowRight' || e.key === 'Enter') changeSlide(1);
-      if(e.key === 'ArrowLeft') changeSlide(-1);
-    });
+    function resetSlide() {
+      // 変更点: こちらも直接 set する
+      db.ref('presentation/currentIndex').set(0);
+    };
   </script>
 </body>
 </html>

@@ -216,6 +216,7 @@
 	// processSelections triggered by admin button: assign non-conflicts, leave conflicts to lotteries
 	processBtn.addEventListener('click', async ()=>{
 		try {
+
 			// 先に選択未完了チェックを行い、途中 return しても processing フラグが残らないようにする
 			const selectionsSnap = await currentSelectionsRef.once('value');
 			const selections = selectionsSnap.val() || {};
@@ -230,7 +231,9 @@
 					return alert('まだ選択を終えていないチームがあります。');
 				}
 			}
-
+						const snapForSlide = await currentSelectionsRef.once('value');
+            await db.ref('presentation/confirmed_picks').set(snapForSlide.val() || {});
+            await db.ref('presentation/currentIndex').set(0);
 			// checks passed -> set processing flag
 			await processingRef.set(true);
 
@@ -304,6 +307,13 @@
 			await processingRef.set(false).catch(()=>{});
 			// くじが無ければ次巡へ（存在するくじがある場合はここで進めない）
 			await tryAdvanceRound().catch(()=>{});
+			firebase.database().ref('draft_picks').once('value').then((snap) => {
+              const picks = snap.val() || {};
+              firebase.database().ref('presentation/confirmed_picks').set(picks);
+              firebase.database().ref('presentation/currentIndex').set(0);
+            }).catch((error) => {
+              console.error("スライド同期エラー:", error);
+            });
 		}
 	});
 
@@ -402,6 +412,13 @@
 			setTimeout(()=> lotteriesRef.child(key).remove().catch(()=>{}), REVEAL_MS);
 			await systemAlertRef.remove();
 			alert(`${teamNames[winnerTeam]||winnerTeam} を獲得者として確定しました。`);
+		firebase.database().ref('draft_picks').once('value').then((snap) => {
+              const picks = snap.val() || {};
+              firebase.database().ref('presentation/confirmed_picks').set(picks);
+              firebase.database().ref('presentation/currentIndex').set(0);
+            }).catch((error) => {
+              console.error("スライド同期エラー:", error);
+            });
 		} catch (e) {
 			console.error(e); alert('開票中にエラーが発生しました。');
 		}
