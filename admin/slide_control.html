@@ -251,25 +251,30 @@
       if(el) el.innerText = `スライド: ${currentIndex + 1} / ${slidesData.length}`;
     }
 
-    function changeSlide(direction) {
+    async function changeSlide(direction) {
       const nextIndex = currentIndex + direction;
-      if (nextIndex >= 0 && nextIndex < slidesData.length) {
-        db.ref('presentation').update({ currentIndex: nextIndex });
+      if (nextIndex < 0 || nextIndex >= slidesData.length) return;
+      try {
+        await db.ref('presentation').update({ currentIndex: nextIndex });
+      } catch (e) {
+        // fallback to local update when DB write is not permitted
+        console.warn('presentation update failed, applying locally', e && e.message ? e.message : e);
+        currentIndex = nextIndex;
+        renderSlide();
+        if (typeof updateStatusText === 'function') updateStatusText();
       }
     }
 
-function changeSlide(direction) {
-      const nextIndex = currentIndex + direction;
-      if (nextIndex >= 0 && nextIndex < slidesData.length) {
-        // 変更点: update ではなく特定のパスへ直接 set する
-        db.ref('presentation/currentIndex').set(nextIndex);
+    async function resetSlide() {
+      try {
+        await db.ref('presentation').update({ currentIndex: 0 });
+      } catch (e) {
+        console.warn('presentation reset failed, applying locally', e && e.message ? e.message : e);
+        currentIndex = 0;
+        renderSlide();
+        if (typeof updateStatusText === 'function') updateStatusText();
       }
     }
-
-    function resetSlide() {
-      // 変更点: こちらも直接 set する
-      db.ref('presentation/currentIndex').set(0);
-    };
   </script>
 </body>
 </html>
